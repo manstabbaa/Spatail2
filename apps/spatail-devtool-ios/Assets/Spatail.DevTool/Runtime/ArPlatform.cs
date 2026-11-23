@@ -105,6 +105,8 @@ namespace Spatail.DevTool
             rotation.AddBinding("<HandheldARInputDevice>/deviceRotation");
             driver.positionInput = new InputActionProperty(position);
             driver.rotationInput = new InputActionProperty(rotation);
+            // If the Input System never delivers a pose (its XR device layout can be compiled out), fall back.
+            cameraObject.AddComponent<ArPoseWatchdog>().Driver = driver;
 #else
             // The Input System backend is switched off in this project, so read the device pose from the XR module.
             cameraObject.AddComponent<ArCameraPoseDriver>();
