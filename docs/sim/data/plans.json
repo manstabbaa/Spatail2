@@ -217,8 +217,7 @@
           }
         }
       ],
-      "planner": "offline",
-      "latencyMs": 8
+      "planner": "offline"
     },
     "placements": {
       "walkthrough/pin-1": {
@@ -289,8 +288,7 @@
           "step": 2
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {}
   },
@@ -306,8 +304,7 @@
           "step": 3
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {}
   },
@@ -362,8 +359,7 @@
           }
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {
       "flow/flow-path": {
@@ -461,8 +457,7 @@
           }
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {
       "faults/fault-1": {
@@ -525,8 +520,7 @@
           }
         }
       ],
-      "planner": "offline",
-      "latencyMs": 9
+      "planner": "offline"
     },
     "placements": {
       "dashboard/chart-output": {
@@ -579,8 +573,7 @@
           }
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {
       "checklist/checklist-spares": {
@@ -620,8 +613,7 @@
           }
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {
       "session/avatar-sara": {
@@ -661,8 +653,7 @@
           }
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {
       "dashboard/chart-output": {
@@ -702,8 +693,7 @@
           }
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {
       "dashboard/chart-output": {
@@ -749,8 +739,7 @@
           }
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {
       "note/note-gate-valve": {
@@ -834,8 +823,7 @@
           }
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {
       "labels/label-motor": {
@@ -881,8 +869,7 @@
           "buildId": "checklist"
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {}
   },
@@ -896,8 +883,7 @@
           "op": "clear"
         }
       ],
-      "planner": "offline",
-      "latencyMs": 1
+      "planner": "offline"
     },
     "placements": {}
   }

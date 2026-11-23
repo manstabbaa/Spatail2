@@ -1,0 +1,38 @@
+name: CI
+
+# Everything here runs without a Unity licence, an Apple toolchain or Claude credentials.
+on:
+  push:
+  pull_request:
+
+jobs:
+  core:
+    name: Core tests and Unity compile check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Core tests
+        run: dotnet run --project tests/Spatail.Core.Tests
+      - name: Type-check the Unity runtime against Unity reference assemblies
+        run: dotnet build tools/UnityCompileCheck
+      - name: Exported simulator data is up to date
+        run: |
+          dotnet run --project tests/Spatail.Core.Tests -- export docs/sim/data
+          git diff --exit-code -- docs/sim/data
+
+  planner:
+    name: Planner service tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/planner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test

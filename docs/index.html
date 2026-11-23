@@ -1,0 +1,442 @@
+<title>Spatail Developer Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (max 1120px) that opens on a working simulator beside its inspector,
+   then reference sections. Brand taken from the Spatail film: white and lilac, periwinkle accent, ink text. */
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f6f5fc;
+  --surface: #ffffff;
+  --ink: #17161d;
+  --muted: #6b697d;
+  --line: #e5e2f4;
+  --accent: #6c5ce7;
+  --accent-ink: #5546d6;
+  --accent-soft: #ece9fc;
+  --on-accent: #ffffff;
+  --warn: #c75a17;
+  --warn-soft: #fdebdd;
+  --ok: #1f8a5c;
+  --ok-soft: #e0f4ea;
+  --pill-bg: #17161d;
+  --pill-fg: #ffffff;
+  --code-bg: #f4f3fa;
+  --shadow: 0 1px 2px rgba(23, 22, 29, .04), 0 12px 32px rgba(108, 92, 231, .10);
+  --display: "Inter Tight", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0e15; --bg-soft: #16141f; --surface: #1a1824; --ink: #f2f0fa; --muted: #a09db4; --line: #2b2839;
+    --accent: #8f82f5; --accent-ink: #b0a6ff; --accent-soft: #231f3b; --on-accent: #0f0e15;
+    --warn: #f0934f; --warn-soft: #3a2415; --ok: #4fc592; --ok-soft: #14301f;
+    --pill-bg: #f2f0fa; --pill-fg: #17161d; --code-bg: #14121c;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 32px rgba(0, 0, 0, .35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0e15; --bg-soft: #16141f; --surface: #1a1824; --ink: #f2f0fa; --muted: #a09db4; --line: #2b2839;
+  --accent: #8f82f5; --accent-ink: #b0a6ff; --accent-soft: #231f3b; --on-accent: #0f0e15;
+  --warn: #f0934f; --warn-soft: #3a2415; --ok: #4fc592; --ok-soft: #14301f;
+  --pill-bg: #f2f0fa; --pill-fg: #17161d; --code-bg: #14121c;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 32px rgba(0, 0, 0, .35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { animation: none !important; transition: none !important; } }
+body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+a { color: var(--accent-ink); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+h1, h2, h3 { font-family: var(--display); letter-spacing: -0.02em; line-height: 1.12; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); font-weight: 700; }
+h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 600; letter-spacing: -0.01em; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 600 11px/1 var(--body); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.eyebrow.accent { color: var(--accent-ink); }
+.muted { color: var(--muted); }
+code, pre, kbd { font-family: var(--mono); font-size: .86em; }
+code { background: var(--code-bg); padding: .12em .4em; border-radius: 6px; overflow-wrap: anywhere; }
+kbd { background: var(--surface); border: 1px solid var(--line); border-bottom-width: 2px; padding: .05em .45em; border-radius: 6px; white-space: nowrap; }
+pre { margin: 0; background: var(--code-bg); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; overflow-x: auto; line-height: 1.55; }
+pre code { background: none; padding: 0; font-size: 12.5px; overflow-wrap: normal; }
+
+/* ---- top bar ---- */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 20px; height: 56px; }
+.brand { display: flex; align-items: center; gap: 8px; font: 600 18px/1 var(--display); letter-spacing: -0.03em; color: var(--ink); text-decoration: none; flex: none; }
+.brand svg { width: 18px; height: 18px; color: var(--accent); }
+.nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+.nav::-webkit-scrollbar { display: none; }
+.nav a { color: var(--muted); text-decoration: none; font-weight: 500; font-size: 13.5px; padding: 6px 10px; border-radius: 999px; white-space: nowrap; }
+.nav a:hover, .nav a.on { color: var(--ink); background: var(--bg-soft); }
+
+/* ---- hero + simulator ---- */
+.hero { background: linear-gradient(180deg, var(--bg) 0%, var(--bg-soft) 100%); border-bottom: 1px solid var(--line); }
+.hero .wrap { padding-block: 36px 32px; display: grid; gap: 24px; }
+.hero-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 14px 40px; align-items: center; }
+.hero-head .title { display: grid; gap: 12px; justify-items: start; }
+.hero-head .say { display: grid; gap: 14px; justify-items: start; }
+@media (max-width: 860px) { .hero-head { grid-template-columns: minmax(0, 1fr); } }
+.hero h1 { color: var(--accent-ink); }
+.hero .lede { font-size: 1.08rem; color: var(--ink); max-width: 60ch; }
+.thesis { display: inline-block; background: var(--pill-bg); color: var(--pill-fg); font-weight: 600; font-size: 13px; padding: 8px 14px; border-radius: 999px; }
+.bench { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+@media (max-width: 900px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+.stage { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+#sim { position: relative; width: 100%; aspect-ratio: 16 / 10.5; min-height: 300px; }
+#sim canvas { display: block; }
+.sim-note { position: absolute; top: 10px; left: 12px; font-size: 11.5px; color: var(--muted); background: color-mix(in srgb, var(--surface) 80%, transparent); padding: 3px 9px; border-radius: 999px; pointer-events: none; }
+.sim-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.seg { display: inline-flex; background: color-mix(in srgb, var(--surface) 86%, transparent); border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
+.seg button { border: 0; background: none; color: var(--muted); font: 500 12px/1 var(--body); padding: 6px 10px; border-radius: 999px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.console { border-top: 1px solid var(--line); padding: 12px; display: grid; gap: 10px; background: var(--surface); }
+.promptbar { display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 6px 6px 6px 8px; box-shadow: 0 6px 20px rgba(108, 92, 231, .10); }
+.promptbar:focus-within { border-color: var(--accent); }
+.mic { flex: none; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: var(--on-accent); }
+.mic svg { width: 15px; height: 15px; }
+#prompt { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--ink); font: 500 15px/1.2 var(--body); padding: 6px 0; }
+#prompt::placeholder { color: var(--muted); }
+.built { flex: none; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 12px; padding: 7px 12px; border-radius: 999px; white-space: nowrap; }
+.send { flex: none; border: 0; background: var(--accent-soft); color: var(--accent-ink); font: 600 13px/1 var(--body); padding: 9px 14px; border-radius: 999px; cursor: pointer; }
+.send:hover { background: var(--accent); color: var(--on-accent); }
+.reply { font-size: 14px; min-height: 1.6em; padding: 0 6px; }
+.reply b { font-weight: 600; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: thin; }
+.chip { flex: none; border: 1px solid var(--line); background: var(--bg); color: var(--accent-ink); font: 500 13px/1 var(--body); padding: 9px 13px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.chip.used { color: var(--muted); }
+
+.inspector { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; display: flex; flex-direction: column; min-width: 0; min-height: 420px; max-height: 720px; overflow: hidden; }
+.tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.tabs button { border: 0; background: none; color: var(--muted); font: 600 13px/1 var(--body); padding: 10px 12px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.pane { flex: 1; overflow: auto; padding: 14px; min-height: 0; }
+.pane h3 { margin-bottom: 6px; }
+.pane p { font-size: 13.5px; }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; font-size: 13px; margin: 10px 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.rows { display: grid; gap: 6px; margin-top: 10px; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; text-align: left; width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; color: var(--ink); font: inherit; cursor: pointer; }
+.row:hover { border-color: var(--accent); }
+.row .t { font-weight: 600; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .s { grid-column: 1 / -1; font: 12px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.tag { font: 600 10.5px/1 var(--body); letter-spacing: .06em; text-transform: uppercase; padding: 4px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); white-space: nowrap; }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.tag.plain { background: var(--bg-soft); color: var(--muted); }
+.builds { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
+.bchip { display: inline-flex; align-items: center; gap: 6px; background: var(--accent-soft); color: var(--accent-ink); font: 600 12px/1 var(--body); padding: 5px 6px 5px 10px; border-radius: 999px; }
+.bchip button { border: 0; background: var(--surface); color: var(--accent-ink); width: 20px; height: 20px; border-radius: 50%; cursor: pointer; font: 600 12px/1 var(--body); display: grid; place-items: center; padding: 0; }
+.json { font: 12px/1.55 var(--mono); white-space: pre; overflow-x: auto; background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-top: 10px; max-height: 420px; }
+.json .k { color: var(--accent-ink); } .json .s { color: var(--ok); } .json .n { color: var(--warn); }
+.copy { border: 1px solid var(--line); background: var(--bg); color: var(--muted); font: 600 11.5px/1 var(--body); padding: 6px 10px; border-radius: 999px; cursor: pointer; }
+.copy:hover { color: var(--accent-ink); border-color: var(--accent); }
+
+/* ---- sections ---- */
+section.band { padding-block: 56px; border-bottom: 1px solid var(--line); }
+section.band.soft { background: var(--bg-soft); }
+.head { display: grid; gap: 10px; margin-bottom: 26px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 860px) { .grid2, .grid3 { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.card p { font-size: 14px; }
+.stack { display: grid; gap: 12px; min-width: 0; }
+ul.plain { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; max-width: 68ch; }
+ul.plain li::marker { color: var(--accent); }
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 560px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 11px/1.2 var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--bg-soft); }
+tr:last-child td { border-bottom: 0; }
+td.q { font-weight: 600; }
+td .run { border: 1px solid var(--line); background: var(--bg); color: var(--accent-ink); font: 600 12px/1 var(--body); padding: 7px 11px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+td .run:hover { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
+/* pipeline */
+.pipe { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 860px) { .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stagebtn { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; cursor: pointer; color: var(--ink); font: inherit; display: grid; gap: 4px; min-width: 0; position: relative; }
+.stagebtn .n { font: 600 11px/1 var(--mono); color: var(--muted); }
+.stagebtn .t { font: 600 14.5px/1.2 var(--display); }
+.stagebtn .d { font-size: 12px; color: var(--muted); }
+.stagebtn[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.stagebtn[aria-selected="true"] .t { color: var(--accent-ink); }
+.detail { margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 860px) { .detail { grid-template-columns: minmax(0, 1fr); } }
+.files { display: grid; gap: 6px; margin-top: 4px; }
+.files code { display: block; }
+
+/* element picker */
+.picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.picker button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 500 13px/1 var(--mono); padding: 8px 12px; border-radius: 999px; cursor: pointer; }
+.picker button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+/* checklists */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.steps li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; }
+.steps input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--accent); }
+.steps label { font-size: 14px; }
+.steps li:has(input:checked) label { color: var(--muted); }
+.cmd { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-top: 6px; }
+.cmd pre { padding: 9px 12px; }
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 10px 10px 0; font-size: 14px; }
+.note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+
+.tree { font: 13px/1.7 var(--mono); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; overflow-x: auto; white-space: pre; }
+.tree .c { color: var(--muted); font-family: var(--body); }
+.tree b { color: var(--accent-ink); font-weight: 500; }
+footer { padding-block: 28px 40px; color: var(--muted); font-size: 13px; }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#try" aria-label="Spatail">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 1.5c.5 5.6 2.6 8.4 10.5 10.5-7.9 2.100-10 4.900-10.500 10.500C11.500 16.900 9.400 14.100 1.500 12 9.400 9.900 11.500 7.100 12 1.500z"/></svg>
+      spatail
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#try">Try it</a>
+      <a href="#film">From the film</a>
+      <a href="#how">How it works</a>
+      <a href="#spec">Content spec</a>
+      <a href="#apps">The two apps</a>
+      <a href="#planner">AI planner</a>
+      <a href="#extend">Extend</a>
+      <a href="#map">Project map</a>
+      <a href="#status">What is verified</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="hero" id="try">
+  <div class="wrap">
+    <div class="hero-head">
+      <div class="title">
+        <span class="eyebrow accent">With Spatail</span>
+        <h1>Built by you.</h1>
+      </div>
+      <div class="say">
+        <p class="lede">Stand next to the equipment and say what you need. Spatail reads the room, plans the content with AI and builds it in place: a walkthrough on the valve, the flow through the pipes, last week's faults on the motor, this month's output by the bench.</p>
+        <span class="thesis">What AI did to software, Spatail does to mixed reality.</span>
+      </div>
+    </div>
+
+    <div class="bench">
+      <div class="stage">
+        <div id="sim" aria-label="3D simulator of the pump room"></div>
+        <span class="sim-note">Drag to look around</span>
+        <div class="sim-tools">
+          <div class="seg" role="group" aria-label="Twin display">
+            <button type="button" data-twin="solid" aria-pressed="true">Solid</button>
+            <button type="button" data-twin="ghost" aria-pressed="false">Ghost</button>
+            <button type="button" data-twin="hidden" aria-pressed="false">Hidden</button>
+          </div>
+          <div class="seg"><button type="button" id="frame">Frame all</button><button type="button" id="resetroom">Reset</button></div>
+        </div>
+        <div class="console">
+          <form class="promptbar" id="promptform" autocomplete="off">
+            <span class="mic" aria-hidden="true"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 15a3.500 3.500 0 0 0 3.500-3.500v-6a3.500 3.500 0 0 0-7 0v6A3.500 3.500 0 0 0 12 15zm6.500-3.500a1 1 0 1 0-2 0 4.500 4.500 0 0 1-9 0 1 1 0 1 0-2 0 6.500 6.500 0 0 0 5.500 6.420V20H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-2.080a6.500 6.500 0 0 0 5.500-6.420z"/></svg></span>
+            <input id="prompt" type="text" placeholder="Just say what you need" aria-label="Prompt" enterkeyhint="send">
+            <span class="built" id="built" hidden></span>
+            <button class="send" type="submit">Build</button>
+          </form>
+          <div class="reply" id="reply" aria-live="polite"><span class="muted">The room has been scanned: five things recognised. Pick a request below or type your own.</span></div>
+          <div class="chips" id="chips" aria-label="Suggested requests"></div>
+        </div>
+      </div>
+
+      <aside class="inspector" aria-label="Inspector">
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" aria-selected="true" data-tab="plan">Plan</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="placed">Where it landed</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="room">Room model</button>
+        </div>
+        <div class="pane" id="pane"></div>
+      </aside>
+    </div>
+    <p class="muted" style="font-size:13px">This simulator is a browser replay. Every plan and position it shows was produced by the same C# planner and layout solver that ship in the apps, then exported as JSON; the page only draws them. Free-typed requests are routed to the nearest exported plan.</p>
+  </div>
+</section>
+
+<section class="band" id="film">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">From the film to the app</span>
+      <h2>Six requests, six kinds of content</h2>
+      <p>The reference film shows one person asking for six different things in a row. Each row below is one of those moments, what Spatail builds for it, and where the facts come from. Run any of them in the simulator.</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>You say</th><th>Spatail builds</th><th>Made of</th><th>Facts come from</th><th></th></tr></thead>
+        <tbody id="filmrows"></tbody>
+      </table>
+    </div>
+    <div class="grid3" style="margin-top:18px">
+      <div class="card"><h3>It knows the room</h3><p>Content is anchored to things, not coordinates: "on the gate valve", "by the bench", "on the nearest wall". The layout solver turns that into a pose, keeps clear of obstacles and faces you.</p></div>
+      <div class="card"><h3>Changed by saying so</h3><p>Follow-ups work on what is already there. Try <kbd>next</kbd>, <kbd>make the chart bigger</kbd>, <kbd>move the chart next to the motor</kbd> or <kbd>remove the checklist</kbd> in the app; step and remove also work here.</p></div>
+      <div class="card"><h3>Always answers</h3><p>The AI planner runs through a small service that calls Claude. With no network, an on-device planner covers the core requests instantly, so the demo never stalls.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="band soft" id="how">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">How it works</span>
+      <h2>From a sentence to something standing in the room</h2>
+      <p>One request passes through six stages. Select a stage to see what it does, where it lives in the code, and what it produced for the last request you ran above.</p>
+    </div>
+    <div class="pipe" role="tablist" id="pipe"></div>
+    <div class="detail" id="stagedetail"></div>
+  </div>
+</section>
+
+<section class="band" id="spec">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Content spec</span>
+      <h2>Ten elements, eight ways to anchor them</h2>
+      <p>A planner never draws anything. It returns a plan: operations on <em>builds</em>, each a named group of <em>elements</em> anchored to entities in the room. The same JSON comes from the on-device planner, the AI service and the session link, and it is what both apps render.</p>
+    </div>
+    <div class="grid2">
+      <div class="stack">
+        <h3>Elements</h3>
+        <div class="picker" id="elpicker" role="group" aria-label="Element type"></div>
+        <div class="card" id="eldetail"></div>
+      </div>
+      <div class="stack">
+        <h3>Anchors</h3>
+        <div class="tablewrap"><table style="min-width:420px"><thead><tr><th>at</th><th>Where the element goes</th></tr></thead><tbody id="anchorrows"></tbody></table></div>
+        <h3>Operations</h3>
+        <div class="tablewrap"><table style="min-width:420px"><thead><tr><th>op</th><th>Effect</th></tr></thead><tbody>
+          <tr><td><code>add</code></td><td>Adds a build. If one with the same id exists, replaces it. This is also how edits work.</td></tr>
+          <tr><td><code>remove</code></td><td>Removes the build with <code>buildId</code>.</td></tr>
+          <tr><td><code>step</code></td><td>Moves a sequenced build to <code>step</code> (1-based). Elements with a non-zero <code>step</code> show only on that step.</td></tr>
+          <tr><td><code>clear</code></td><td>Removes every build.</td></tr>
+        </tbody></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band soft" id="apps">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">The two apps</span>
+      <h2>One runtime, a headset app and a dev tool</h2>
+      <p>Both apps are thin shells around the shared package <code>com.spatail.core</code>. Each supplies four things: the camera, what the device knows about the room, a pointer, and text or speech input. Press Play in either Unity project without a device and you get the same runtime in a simulated room.</p>
+    </div>
+    <div class="grid2" id="appcards"></div>
+  </div>
+</section>
+
+<section class="band" id="planner">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">AI planner</span>
+      <h2>A small service between the device and Claude</h2>
+      <p>Devices never hold a model API key. They send the request, the room model, the site's knowledge and the current builds to the planner service; it calls Claude with a schema-constrained output and returns a plan in the wire format above.</p>
+    </div>
+    <div class="grid2">
+      <div class="stack">
+        <h3>Run it</h3>
+        <div id="plannercmds"></div>
+        <p class="note">Then set the planner URL to this machine's LAN address, for example <code>http://192.168.1.20:8787</code>: in the iOS dev tool under Settings, on the headset by pushing settings from the dev tool over the session link, or at build time with <code>Assets/Resources/SpatailConfig.json</code>.</p>
+        <div class="tablewrap"><table style="min-width:440px"><thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead><tbody>
+          <tr><td><code>ANTHROPIC_API_KEY</code></td><td>none</td><td>Credentials for Claude. Stays on the service.</td></tr>
+          <tr><td><code>PORT</code></td><td><code>8787</code></td><td>Port to listen on.</td></tr>
+          <tr><td><code>SPATAIL_TOKEN</code></td><td>none</td><td>Optional shared secret the apps must send.</td></tr>
+          <tr><td><code>SPATAIL_MODEL</code></td><td><code>claude-opus-5-5</code></td><td>Claude model id.</td></tr>
+          <tr><td><code>SPATAIL_EFFORT</code></td><td><code>low</code></td><td><code>low</code> to <code>max</code>. Higher is more thorough and slower.</td></tr>
+        </tbody></table></div>
+      </div>
+      <div class="stack">
+        <h3>What one call looks like</h3>
+        <ul class="plain">
+          <li>The standing instructions and the site's knowledge go in two cached system blocks, so repeat requests for a site read most of their input from the prompt cache.</li>
+          <li>The room, the current builds, what the user is pointing at and what they said go in the user message.</li>
+          <li>The response is constrained to the plan schema with structured outputs, so the model cannot return something the device cannot parse.</li>
+          <li>If the model declines a request, the API retries on its default fallback model within the same call.</li>
+          <li>Failures come back as a plan with <code>error</code> set. The device shows the reply and answers with its on-device planner instead.</li>
+        </ul>
+        <pre><code id="requestsample"></code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band soft" id="extend">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Extend</span>
+      <h2>New equipment, new content, new planners</h2>
+      <p>The pump station is data. The equipment, its parts, its stand-in hologram and everything known about it live in one JSON file; nothing about pumps is in the code.</p>
+    </div>
+    <div class="grid2">
+      <div class="stack">
+        <h3>Anatomy of a site</h3>
+        <p class="muted" style="font-size:14px">Select a part to see its definition and find it in the simulator.</p>
+        <div class="picker" id="partpicker" role="group" aria-label="Part"></div>
+        <pre><code id="partjson"></code></pre>
+      </div>
+      <div class="stack">
+        <div class="card">
+          <h3>Register new equipment</h3>
+          <p>Copy <code>pump_station.json</code>, describe your parts (id, label, aliases, bounds, optional stand-in shapes) and your knowledge (procedures, flows, faults, metrics, spares, people). Point <code>SpatailApp.DefaultSite</code> at it. Fixtures can bind to real furniture: a <code>"mount": "table"</code> fixture adopts a real table when the room has one and falls back to a hologram when it does not.</p>
+        </div>
+        <div class="card">
+          <h3>Add an element type</h3>
+          <p>Add the name to <code>ElementType</code> and its fields to <code>Element</code> and <code>SpecJson</code>, write an <code>ElementView</code> subclass and register it in <code>ContentRenderer.AddView</code>, then add it to the service schema and system prompt. The service tests fail until the C# and TypeScript lists match.</p>
+        </div>
+        <div class="card">
+          <h3>Write a planner</h3>
+          <p>Implement <code>IPlanner.PlanAsync(PlanRequest)</code> and return a <code>PlanResult</code>. <code>BuildFactory</code> shows what well-formed builds look like. Whatever a planner returns goes through <code>SpecJson.Sanitize</code>, which drops elements anchored to things that are not in the room.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="map">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Project map</span>
+      <h2>Where everything lives</h2>
+    </div>
+    <div class="tree" id="tree"></div>
+  </div>
+</section>
+
+<section class="band soft" id="status">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">What is verified</span>
+      <h2>Tested here, and still to be run on your machines</h2>
+      <p>This project was written in an environment with no Unity editor, no Xcode, no headset and no Claude credentials. The table says exactly what was checked and how, and what has not been run yet.</p>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>Area</th><th>Status</th><th>How it was checked</th></tr></thead><tbody id="statusrows"></tbody></table></div>
+  </div>
+</section>
+</main>
+
+<footer><div class="wrap">Spatail. Bringing artificial intelligence into the mixed reality medium.</div></footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="sim/spatail-sim.js"></script>
+<script src="sim/data/spatail-data.js"></script>
+<script src="content.js"></script>
+<script src="docs.js"></script>
