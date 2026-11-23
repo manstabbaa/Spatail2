@@ -1,0 +1,19 @@
+{
+    "name": "Spatail.Quest",
+    "rootNamespace": "Spatail.Quest",
+    "references": [
+        "Spatail.Core",
+        "Spatail.Runtime",
+        "Oculus.VR",
+        "meta.xr.mrutilitykit"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

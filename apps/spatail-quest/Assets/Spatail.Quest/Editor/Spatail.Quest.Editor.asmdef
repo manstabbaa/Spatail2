@@ -1,0 +1,26 @@
+{
+    "name": "Spatail.Quest.Editor",
+    "rootNamespace": "Spatail.Quest.Editor",
+    "references": [
+        "Spatail.Core",
+        "Spatail.Runtime",
+        "Spatail.Quest",
+        "Oculus.VR",
+        "Oculus.VR.Editor",
+        "Unity.XR.Management",
+        "Unity.XR.Management.Editor",
+        "Unity.XR.OpenXR",
+        "Unity.XR.OpenXR.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

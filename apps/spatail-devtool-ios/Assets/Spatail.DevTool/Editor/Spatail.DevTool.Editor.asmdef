@@ -1,0 +1,22 @@
+{
+    "name": "Spatail.DevTool.Editor",
+    "rootNamespace": "Spatail.DevTool.Editor",
+    "references": [
+        "Spatail.Core",
+        "Spatail.Runtime",
+        "Spatail.DevTool",
+        "Unity.XR.Management",
+        "Unity.XR.Management.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
