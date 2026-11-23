@@ -13,7 +13,10 @@ namespace Spatail.DevTool
         string _committedField, _committedText;
         bool _committedSubmit;
 
-        bool IsEditing(string id) => _keyboard != null && _keyboardField == id;
+        string _focusedControl = "";
+
+        /// <summary>True while the user is typing into this field, on either kind of keyboard.</summary>
+        bool IsEditing(string id) => (_keyboard != null && _keyboardField == id) || _focusedControl == id;
 
         /// <summary>
         /// A single-line text field. On devices with an on-screen keyboard it opens the system keyboard (which also
@@ -34,7 +37,7 @@ namespace Spatail.DevTool
 
             if (TouchScreenKeyboard.isSupported)
             {
-                bool editing = IsEditing(id);
+                bool editing = _keyboard != null && _keyboardField == id;
                 if (editing) value = _keyboard.text ?? "";
                 bool empty = value.Length == 0;
                 string shown = empty ? placeholder : (secure ? new string('•', value.Length) : value);

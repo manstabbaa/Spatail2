@@ -37,13 +37,15 @@ namespace Spatail.Quest.EditorTools
         const string XrSettingsKey = "com.unity.xr.management.loader_settings";  // XRGeneralSettings.settingsKey
 
         const string SessionKey = "Spatail.Quest.SetupApplied";
+        const string MetaRulesKey = "Spatail.Quest.MetaRulesApplied";
         static int _waitedFrames;
 
         static SpatailQuestSetup()
         {
             // Batch builds run the setup themselves, at the right moment.
-            if (Application.isBatchMode || SessionState.GetBool(SessionKey, false)) return;
-            EditorApplication.update += AutoRun;
+            if (Application.isBatchMode) return;
+            if (!SessionState.GetBool(SessionKey, false)) EditorApplication.update += AutoRun;
+            else if (!SessionState.GetBool(MetaRulesKey, false)) EditorApplication.update += AutoRunMetaRules;
         }
 
         static void AutoRun()
@@ -54,6 +56,29 @@ namespace Spatail.Quest.EditorTools
             EditorApplication.update -= AutoRun;
             SessionState.SetBool(SessionKey, true);
             Apply();
+            // If Apply had to switch the build target, the editor reloads scripts and the static constructor
+            // schedules the Meta rules afterwards; otherwise schedule them now.
+            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android) EditorApplication.update += AutoRunMetaRules;
+        }
+
+        /// <summary>
+        /// Second pass, once Android is the active target: let the Meta SDK's Project Setup Tool apply whatever it
+        /// still considers outstanding. Best effort; anything it could not fix is listed in its own window.
+        /// </summary>
+        static void AutoRunMetaRules()
+        {
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode) return;
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android || !MetaConfigReady) return;
+            EditorApplication.update -= AutoRunMetaRules;
+            SessionState.SetBool(MetaRulesKey, true);
+            try
+            {
+                RunMetaProjectSetup();
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[Spatail] Meta Project Setup Tool was not run: " + ex.Message);
+            }
         }
 
         public static bool MetaConfigReady

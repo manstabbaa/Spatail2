@@ -12,6 +12,7 @@ namespace Spatail.DevTool
         float _scale = 1f;
         float _styledScale = -1f;
 
+        GUIStyle _textWrap, _textWrapMuted, _textWrapAccent, _textCenter;
         GUIStyle _text, _textMuted, _textSmall, _textBold, _textAccent, _textMono, _textWhite;
         GUIStyle _panel, _card, _strip;
         GUIStyle _buttonPrimary, _buttonSecondary, _buttonQuiet, _buttonDanger, _buttonRound, _buttonRoundQuiet, _buttonRoundHot;
@@ -61,6 +62,14 @@ namespace Spatail.DevTool
             _textBold = Text(Ink, 15, FontStyle.Bold);
             _textAccent = Text(Accent, 13, FontStyle.Bold);
             _textWhite = Text(Color.white, 13, FontStyle.Bold);
+            _textCenter = Text(Ink, 14, FontStyle.Normal);
+            _textCenter.alignment = TextAnchor.MiddleCenter;
+            _textWrap = Text(Ink, 13, FontStyle.Normal);
+            _textWrap.wordWrap = true;
+            _textWrapMuted = new GUIStyle(_textWrap);
+            _textWrapMuted.normal.textColor = Muted;
+            _textWrapAccent = new GUIStyle(_textWrap);
+            _textWrapAccent.normal.textColor = Accent;
             _textMono = Text(Ink, 11.5f, FontStyle.Normal);
             _textMono.wordWrap = true;
             _textMono.alignment = TextAnchor.UpperLeft;

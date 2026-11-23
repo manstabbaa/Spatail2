@@ -130,6 +130,7 @@ namespace Spatail.DevTool
             {
                 _uiRects.Clear();
                 _uiRects.AddRange(_uiRectsBuilding);
+                _focusedControl = GUI.GetNameOfFocusedControl();
             }
         }
 
@@ -184,7 +185,7 @@ namespace Spatail.DevTool
         Rect DrawBottomBar(float margin, float bottom)
         {
             float pad = P(10);
-            float row = P(RowHeight), chip = P(ChipHeight), replyHeight = P(24);
+            float row = P(RowHeight), chip = P(ChipHeight), replyHeight = P(36);
             float height = pad + chip + P(8) + replyHeight + P(6) + row + pad;
             var rect = new Rect(_safe.x + margin, bottom - height, _safe.width - margin * 2f, height);
             Claim(rect);
@@ -200,12 +201,12 @@ namespace Spatail.DevTool
 
             // [tools] [mic] [ prompt ............ ] [send]
             float gap = P(8);
-            var tools = new Rect(x, y, row, row);
-            var mic = new Rect(tools.xMax + gap, y, row, row);
+            var tools = new Rect(x, y, P(58), row);
+            var mic = new Rect(tools.xMax + gap, y, P(50), row);
             var send = new Rect(x + width - P(64), y, P(64), row);
             var field = new Rect(mic.xMax + gap, y, send.x - gap - mic.xMax - gap, row);
 
-            if (GUI.Button(tools, _drawerOpen ? "×" : "≡", _drawerOpen ? _buttonRound : _buttonRoundQuiet)) _drawerOpen = !_drawerOpen;
+            if (GUI.Button(tools, _drawerOpen ? "Close" : "Tools", _drawerOpen ? _buttonRound : _buttonRoundQuiet)) _drawerOpen = !_drawerOpen;
 
             bool canSpeak = _speech != null && _speech.IsAvailable;
             if (GUI.Button(mic, _listening ? "Stop" : "Mic", _listening ? _buttonRoundHot : (canSpeak ? _buttonRound : _buttonRoundQuiet)))
@@ -261,28 +262,27 @@ namespace Spatail.DevTool
         void DrawReply(Rect rect)
         {
             string reply;
-            GUIStyle style = _text;
+            GUIStyle style = _textWrap;
             PlanResult last = _app.LastPlan;
             string chip = null;
 
-            if (Time.unscaledTime < _noticeUntil) { reply = _notice; style = _textAccent; }
-            else if (_app.State == AppState.Thinking) { reply = "Building…  " + Truncate(_app.LastPrompt, 60); style = _textMuted; }
-            else if (_app.State == AppState.Starting) { reply = _room != null ? _room.Status : "Starting"; style = _textMuted; }
-            else if (_app.State == AppState.Scanning) { reply = "Reading the room…"; style = _textMuted; }
-            else if (_app.IsMovingStation) { reply = "Drag on the floor to move the pump, twist with two fingers to turn it, lift to drop."; style = _textAccent; }
+            if (Time.unscaledTime < _noticeUntil) { reply = _notice; style = _textWrapAccent; }
+            else if (_app.State == AppState.Thinking) { reply = "Building…  " + Truncate(_app.LastPrompt, 60); style = _textWrapMuted; }
+            else if (_app.State == AppState.Starting) { reply = _room != null ? _room.Status : "Starting"; style = _textWrapMuted; }
+            else if (_app.State == AppState.Scanning) { reply = "Reading the room…"; style = _textWrapMuted; }
+            else if (_app.IsMovingStation) { reply = "Drag on the floor to move the pump, twist with two fingers to turn it, lift to drop."; style = _textWrapAccent; }
             else if (last != null)
             {
                 reply = last.reply ?? "";
                 if (!string.IsNullOrEmpty(last.chip)) chip = "Built " + last.chip;
             }
-            else { reply = "Ask for a walkthrough, the flow, fault history, a dashboard, a checklist, or bring someone in."; style = _textMuted; }
+            else { reply = "Ask for a walkthrough, the flow, fault history, a dashboard, a checklist, or bring someone in."; style = _textWrapMuted; }
 
             float chipWidth = 0f;
             if (chip != null)
             {
                 chipWidth = WidthOf(_chipBuilt, chip);
                 var chipRect = new Rect(rect.xMax - chipWidth, rect.y + (rect.height - P(26)) * 0.5f, chipWidth, P(26));
-                Fill(chipRect, _chipBuilt);
                 GUI.Label(chipRect, chip, _chipBuilt);
                 chipWidth += P(8);
             }

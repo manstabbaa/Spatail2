@@ -14,11 +14,13 @@ namespace Spatail.DevTool
     {
         const int Partial = 0, Final = 1, Error = 2, Stopped = 3;
 
+#pragma warning disable 0649 // only assigned from the native callback, which exists in iOS players
         struct NativeEvent
         {
             public int kind;
             public string text;
         }
+#pragma warning restore 0649
 
         static readonly Queue<NativeEvent> Events = new Queue<NativeEvent>();
         static readonly object Gate = new object();

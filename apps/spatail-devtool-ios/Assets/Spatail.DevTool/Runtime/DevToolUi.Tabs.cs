@@ -159,8 +159,7 @@ namespace Spatail.DevTool
                     GUI.enabled = b.currentStep > 1;
                     if (GUI.Button(new Rect(row.x, row.y, w, row.height), "Prev", _buttonQuiet)) _app.SetStep(b.id, b.currentStep - 1);
                     GUI.enabled = true;
-                    var label = new GUIStyle(_text) { alignment = TextAnchor.MiddleCenter };
-                    GUI.Label(new Rect(row.x + w, row.y, w + P(8), row.height), b.currentStep + " of " + b.stepCount, label);
+                    GUI.Label(new Rect(row.x + w, row.y, w + P(8), row.height), b.currentStep + " of " + b.stepCount, _textCenter);
                     GUI.enabled = b.currentStep < b.stepCount;
                     if (GUI.Button(new Rect(row.x + w * 2f + P(8), row.y, w, row.height), "Next", _buttonQuiet)) _app.SetStep(b.id, b.currentStep + 1);
                     GUI.enabled = true;
