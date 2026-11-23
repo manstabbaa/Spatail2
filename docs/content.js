@@ -93,3 +93,10 @@ window.SPATAIL_STATUS = [
   ['Recording in the Meta XR Simulator', 'Not run', 'The simulator is a Windows and macOS application; it cannot run here. The recorder command and the steps are in place for you.'],
   ['First Unity import, device builds, and everything on device', 'Not run', 'Depth and camera permissions, where things land relative to what was seen, legibility in the headset, performance. These need your hardware.']
 ];
+
+/* The demo clip shown under Recording. Recorded from the lab by a headless browser. */
+window.SPATAIL_MEDIA = {
+  video: 'media/spatail-lab-demo.mp4',
+  poster: 'media/spatail-lab-demo.jpg',
+  caption: 'Recorded from the lab in a headless browser, just under two minutes. The six film requests run in the Workshop, then the same runtime starts in a generated plant room it has never seen and outlines each surface as it is found. Programs here are the recorded ones; no call to Claude was made.'
+};
