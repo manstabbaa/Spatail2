@@ -373,15 +373,15 @@
     $('plannercmds').innerHTML = cmds.map(function (c) { return '<div class="cmd"><pre><code>' + esc(c) + '</code></pre><button type="button" class="copy" data-copytext="' + esc(c) + '">Copy</button></div>'; }).join('') +
       '<p class="muted" style="font-size:13.5px;margin-top:10px">Try it with no device, against the simulated room:</p><div class="cmd"><pre><code>ANTHROPIC_API_KEY=... npm run plan -- "label every part and explain the valve"</code></pre><button type="button" class="copy" data-copytext="ANTHROPIC_API_KEY=... npm run plan -- &quot;label every part and explain the valve&quot;">Copy</button></div>';
     var sample = {
-      'POST /v1/plan': {
+      'request: POST /v1/plan': {
         prompt: 'Has it failed before?',
         focus: 'motor',
         site: { name: 'Pump P-101', equipment: 'pump-p101' },
-        room: { floorY: 0, user: DATA.room.user, entities: '[' + DATA.room.entities.length + ' entities]' },
+        room: { floorY: 0, user: '{position, forward}', entities: '[' + DATA.room.entities.length + ' entities]' },
         knowledge: '{procedures, flows, faults, metrics, spares, people}',
         builds: '[what is already in the room]'
       },
-      '200': { reply: 'Two faults last week, on the motor and the coupling.', chip: 'Fault history', ops: '[...]', planner: 'claude-opus-5-5', latencyMs: 2100 }
+      'response: 200': { reply: 'Two faults last week, on the motor and the coupling.', chip: 'Fault history', ops: '[...]', planner: 'claude-opus-5-5', latencyMs: 2100 }
     };
     $('requestsample').textContent = JSON.stringify(sample, null, 2);
   }

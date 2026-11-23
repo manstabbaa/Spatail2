@@ -97,7 +97,7 @@ namespace Spatail
 
             var tools = new GameObject("Tools");
             tools.transform.SetParent(transform, false);
-            tools.transform.localPosition = new Vector3(0, -Height * 0.5f - 0.105f, 0);
+            tools.transform.localPosition = new Vector3(0, -Height * 0.5f - 0.13f, 0);
             _toolRow = tools.transform;
         }
 
