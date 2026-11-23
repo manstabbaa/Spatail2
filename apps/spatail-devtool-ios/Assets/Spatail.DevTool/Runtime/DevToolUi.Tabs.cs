@@ -5,22 +5,39 @@ using UnityEngine;
 
 namespace Spatail.DevTool
 {
-    /// <summary>The tools drawer: six tabs of developer tooling over the running app.</summary>
+    /// <summary>
+    /// The tools drawer: six tabs of developer tooling over the running app. Space is what the device senses now,
+    /// Experiences is what is running, Code is the program behind one of them, open for editing.
+    /// </summary>
     public sealed partial class DevToolUi
     {
-        static readonly string[] TabNames = { "Room", "Builds", "Spec", "Log", "Settings", "Link" };
+        static readonly string[] TabNames = { "Space", "Experiences", "Code", "Log", "Settings", "Link" };
         static readonly TwinMode[] TwinModes = { TwinMode.Solid, TwinMode.Ghost, TwinMode.Occluder, TwinMode.Hidden };
+        const int CodeTab = 2;
+        const string ScratchId = "scratch";
+        const string StarterProgram =
+            "// A program draws with scene, reads the place with space, and listens with voice.\n" +
+            "const ahead = vec.add(user.head.position, vec.scale(vec.normalize(vec.flat(user.head.forward)), 1.2));\n" +
+            "const hit = space.raycast(user.head.position, user.head.forward, 6);\n" +
+            "kit.label(hit ? 'This is ' + hit.distance.toFixed(2) + ' m away' : 'Nothing sensed here yet', hit ? hit.position : ahead);\n";
 
         int _tab;
         float _cy, _cw;      // layout cursor and width inside the current tab, in pixels
+        readonly float[] _tabWidths = new float[6];
 
-        // Cached text for the heavier tabs.
-        PlanResult _specPlan;
-        string _specJson = "", _specShown = "";
+        // Cached text and textures for the heavier tabs.
         int _logCount = -1;
         string _logText = "";
         string _localAddress = "";
         float _localAddressAt = -100f;
+        byte[] _frameBytes;
+        Texture2D _frameTexture;
+
+        // Programs that stopped with an error, most recent first; the runtime forgets them, the dev tool does not.
+        readonly List<Experience> _failures = new List<Experience>();
+
+        // The program open in the Code tab.
+        string _codeId, _codeTitle = "", _codeText = "", _codeLoaded = "", _codeError;
 
         // Editable copies of settings; written back when the user finishes typing.
         string _fieldUrl = "", _fieldToken = "", _fieldName = "", _fieldJoin = "";
@@ -41,6 +58,11 @@ namespace Spatail.DevTool
             if (!IsEditing("settings.name") && _fieldName != settings.DisplayName) { settings.DisplayName = _fieldName; _fieldName = settings.DisplayName; }
         }
 
+        void OnDestroy()
+        {
+            if (_frameTexture != null) Destroy(_frameTexture);
+        }
+
         // ---- frame ---------------------------------------------------------------------------
 
         void DrawDrawer(Rect rect)
@@ -49,13 +71,25 @@ namespace Spatail.DevTool
             Fill(rect, _panel);
             float pad = P(10);
 
-            // Tab bar.
+            // Tab bar: each tab as wide as its name needs, scaled together to fill the row.
             float tabHeight = P(ChipHeight);
-            float tabWidth = (rect.width - pad * 2f) / TabNames.Length;
+            float available = rect.width - pad * 2f, natural = 0f;
             for (int i = 0; i < TabNames.Length; i++)
             {
-                var r = new Rect(rect.x + pad + i * tabWidth, rect.y + pad, tabWidth, tabHeight);
-                if (GUI.Button(r, TabNames[i], i == _tab ? _tabOn : _tabOff)) _tab = i;
+                _tabWidths[i] = WidthOf(_tabOn, TabNames[i]) + P(12);
+                natural += _tabWidths[i];
+            }
+            float tabX = rect.x + pad;
+            for (int i = 0; i < TabNames.Length; i++)
+            {
+                float width = _tabWidths[i] * available / natural;
+                if (GUI.Button(new Rect(tabX, rect.y + pad, width, tabHeight), TabNames[i], i == _tab ? _tabOn : _tabOff) && _tab != i)
+                {
+                    _tab = i;
+                    CloseKeyboard();
+                    GUI.FocusControl(null);
+                }
+                tabX += width;
             }
 
             var area = new Rect(rect.x + pad, rect.y + pad + tabHeight + P(8), rect.width - pad * 2f, rect.height - pad * 2f - tabHeight - P(8));
@@ -64,9 +98,9 @@ namespace Spatail.DevTool
             _cw = area.width;
             switch (_tab)
             {
-                case 0: DrawRoomTab(); break;
-                case 1: DrawBuildsTab(); break;
-                case 2: DrawSpecTab(); break;
+                case 0: DrawSpaceTab(); break;
+                case 1: DrawExperiencesTab(); break;
+                case CodeTab: DrawCodeTab(); break;
                 case 3: DrawLogTab(scroll, area.height); break;
                 case 4: DrawSettingsTab(); break;
                 default: DrawLinkTab(); break;
@@ -85,6 +119,14 @@ namespace Spatail.DevTool
 
         void Line(string text, GUIStyle style = null) => GUI.Label(Next(20, 2), text, style ?? _textMuted);
 
+        /// <summary>Text that wraps over as many lines as it needs.</summary>
+        void Wrapped(string text, GUIStyle style, float gapPoints = 6f)
+        {
+            float height = style.CalcHeight(new GUIContent(text), _cw);
+            GUI.Label(new Rect(0, _cy, _cw, height), text, style);
+            _cy += height + P(gapPoints);
+        }
+
         /// <summary>Splits a row into equal buttons and returns the index pressed, or -1.</summary>
         int ButtonRow(Rect row, string[] labels, GUIStyle[] styles)
         {
@@ -96,137 +138,265 @@ namespace Spatail.DevTool
             return pressed;
         }
 
-        // ---- Room ----------------------------------------------------------------------------
+        // ---- Space ---------------------------------------------------------------------------
 
-        void DrawRoomTab()
+        void DrawSpaceTab()
         {
-            RoomModel room = _app.Room;
-            Heading("What Spatail sees");
-            if (room == null || room.entities.Count == 0)
+            Heading("What the device senses now");
+            Wrapped(SensorStatus, _textWrap, 2);
+            float floorY = _app.FloorY;
+            bool floorGuessed = _ar != null && _ar.FloorIsEstimated;
+            Line("Floor at y = " + floorY.ToString("0.00") + " m" + (floorGuessed ? " (a guess until a floor is found)" : ""));
+            if (_app.Head != null)
             {
-                Line("Nothing yet. " + (_room != null ? _room.Status : ""));
-                return;
+                Vector3 head = _app.Head.transform.position;
+                Line("You: " + head.x.ToString("0.0") + ", " + head.y.ToString("0.0") + ", " + head.z.ToString("0.0") +
+                     " · " + (head.y - floorY).ToString("0.00") + " m above the floor");
             }
-            Vec3 user = room.userPosition, station = _app.Station.position;
-            Line(room.entities.Count + " entities · floor at y = " + room.floorY.ToString("0.00") + " m");
-            Line("You: " + user.x.ToString("0.0") + ", " + user.y.ToString("0.0") + ", " + user.z.ToString("0.0") +
-                 "   Pump: " + station.x.ToString("0.0") + ", " + station.z.ToString("0.0") + " heading " + Mathf.RoundToInt(_app.Station.rotation.YawDegrees) + "°");
+            if (_ar != null) Wrapped("Ray casts answered by: " + _ar.RaycastInfo, _textWrapMuted);
             _cy += P(4);
 
-            foreach (RoomEntity e in room.entities)
+            Heading("Last frame sent");
+            byte[] jpeg = _app.LastFrameJpeg;
+            if (jpeg == null || jpeg.Length == 0)
             {
-                Rect card = Next(50, 6);
-                Fill(card, _card);
-                float pad = P(10);
-                string kind = e.kind + (EntityKind.IsSurface(e.kind) || e.kind == EntityKind.Equipment ? "" : (e.isVirtual ? " · stand-in" : " · real"));
-                float badgeWidth = WidthOf(_badge, kind);
-                var badge = new Rect(card.xMax - pad - badgeWidth, card.y + P(8), badgeWidth, P(20));
-                GUI.Label(badge, kind, _badge);
-                GUI.Label(new Rect(card.x + pad, card.y + P(6), badge.x - card.x - pad * 2f, P(20)), string.IsNullOrEmpty(e.label) ? e.id : e.label, _textBold);
-                string size = e.size.x.ToString("0.00") + " × " + e.size.y.ToString("0.00") + " × " + e.size.z.ToString("0.00") + " m";
-                GUI.Label(new Rect(card.x + pad, card.y + P(27), card.width - pad * 2f, P(18)), e.id + " · " + size, _textSmall);
+                Wrapped(_app.Director.RemoteActive
+                    ? "None yet. A frame is captured each time a request goes to the planner."
+                    : "None. Frames are only captured when the planner is connected.", _textWrapMuted);
+            }
+            else
+            {
+                if (!ReferenceEquals(jpeg, _frameBytes))
+                {
+                    _frameBytes = jpeg;
+                    if (_frameTexture == null) _frameTexture = new Texture2D(2, 2, TextureFormat.RGB24, false) { name = "Spatail Frame Preview" };
+                    _frameTexture.LoadImage(jpeg);
+                }
+                float aspect = _frameTexture.height > 0 ? (float)_frameTexture.width / _frameTexture.height : 1.33f;
+                float height = Mathf.Min(P(200), _cw / aspect);
+                var picture = new Rect(0, _cy, height * aspect, height);
+                GUI.DrawTexture(picture, _frameTexture, ScaleMode.ScaleToFit, false);
+                _cy += height + P(6);
+                Line(_frameTexture.width + " × " + _frameTexture.height + " px · " + (jpeg.Length / 1024) + " KB", _textSmall);
+            }
+            if (_ar != null)
+            {
+                Wrapped(_ar.FrameInfo, _textWrapMuted, 4);
+                // How the camera image is turned upright cannot be checked without a device, so it can be put right here.
+                Wrapped("The picture should be upright, as you saw it. If it is not, turn or flip it; that applies from the next request.", _textWrapMuted);
+                bool auto = _ar.FrameRotation < 0;
+                int pressed = ButtonRow(Next(ChipHeight, 10),
+                    new[] { auto ? "Auto (" + _ar.AppliedRotation + "°)" : "Auto", "Turn 90°", _ar.FrameFlip ? "Flipped" : "Flip" },
+                    new[] { auto ? _segmentOn : _segmentOff, auto ? _segmentOff : _segmentOn, _ar.FrameFlip ? _segmentOn : _segmentOff });
+                if (pressed == 0) _ar.FrameRotation = -1;
+                else if (pressed == 1) _ar.FrameRotation = (_ar.AppliedRotation + 90) % 360;
+                else if (pressed == 2) _ar.FrameFlip = !_ar.FrameFlip;
+            }
+
+            IReadOnlyList<RoomEntity> surfaces = _app.Surfaces;
+            Heading("Surfaces found so far (" + surfaces.Count + ")");
+            if (surfaces.Count == 0) Wrapped("None yet. Nothing is known about a place in advance; surfaces appear as the device sees them.", _textWrapMuted);
+            foreach (RoomEntity e in surfaces) EntityCard(e);
+
+            IReadOnlyList<RoomEntity> props = _app.Props;
+            if (props.Count > 0)
+            {
+                Vec3 station = _app.Station.position;
+                Heading("Stand-in props (" + props.Count + ")");
+                Line("Placed by the app, not sensed. At " + station.x.ToString("0.0") + ", " + station.z.ToString("0.0") +
+                     ", heading " + Mathf.RoundToInt(_app.Station.rotation.YawDegrees) + "°");
+                foreach (RoomEntity e in props) EntityCard(e);
             }
         }
 
-        // ---- Builds --------------------------------------------------------------------------
-
-        void DrawBuildsTab()
+        void EntityCard(RoomEntity e)
         {
-            IReadOnlyList<Build> builds = _app.Store.Builds;
-            Heading("In the room now");
-            if (builds.Count == 0)
-            {
-                Line("Nothing has been built yet. Try a suggestion below.");
-                return;
-            }
+            Rect card = Next(50, 6);
+            Fill(card, _card);
+            float pad = P(10);
+            float badgeWidth = WidthOf(_badge, e.kind);
+            var badge = new Rect(card.xMax - pad - badgeWidth, card.y + P(8), badgeWidth, P(20));
+            GUI.Label(badge, e.kind, _badge);
+            GUI.Label(new Rect(card.x + pad, card.y + P(6), badge.x - card.x - pad * 2f, P(20)), string.IsNullOrEmpty(e.label) ? e.id : e.label, _textBold);
+            string size = e.size.x.ToString("0.00") + " × " + e.size.y.ToString("0.00") + " × " + e.size.z.ToString("0.00") + " m";
+            GUI.Label(new Rect(card.x + pad, card.y + P(27), card.width - pad * 2f, P(18)), e.id + " · " + size, _textSmall);
+        }
 
-            // Copy first: the buttons below change the store.
-            var snapshot = new List<Build>(builds);
-            foreach (Build b in snapshot)
+        // ---- Experiences ---------------------------------------------------------------------
+
+        void DrawExperiencesTab()
+        {
+            Heading("Running now");
+            // Copy first: the buttons below change the list.
+            var running = new List<Experience>(_app.Runtime.Experiences);
+            if (running.Count == 0) Wrapped("Nothing is running. Ask for something below, or write a program in the Code tab.", _textWrapMuted);
+
+            float pad = P(10);
+            foreach (Experience exp in running)
             {
-                bool stepped = b.stepCount > 0;
-                Rect card = Next(stepped ? 102 : 96, 8);
+                int logLines = Mathf.Min(3, exp.Log.Count);
+                Rect card = Next(6 + 20 + 18 + logLines * 16 + 6 + RowHeight + 10, 8);
                 Fill(card, _card);
-                float pad = P(10);
                 float inner = card.width - pad * 2f;
-                GUI.Label(new Rect(card.x + pad, card.y + P(6), inner, P(20)), b.title + "  ·  " + b.kind, _textBold);
-                GUI.Label(new Rect(card.x + pad, card.y + P(26), inner, P(18)), Summarise(b), _textSmall);
+                float y = card.y + P(6);
+                string nodes = exp.NodeCount + (exp.NodeCount == 1 ? " node" : " nodes");
+                GUI.Label(new Rect(card.x + pad, y, inner, P(20)), exp.Title + "  ·  " + nodes, _textBold);
+                y += P(20);
+                GUI.Label(new Rect(card.x + pad, y, inner, P(18)), "\u201C" + Truncate(exp.Prompt, 70) + "\u201D", _textSmall);
+                y += P(18);
+                for (int i = exp.Log.Count - logLines; i < exp.Log.Count; i++)
+                {
+                    bool error = exp.Log[i].StartsWith("! ");
+                    GUI.Label(new Rect(card.x + pad, y, inner, P(16)), Truncate(exp.Log[i], 90), error ? _textAccent : _textSmall);
+                    y += P(16);
+                }
 
                 var row = new Rect(card.x + pad, card.yMax - pad - P(RowHeight), inner, P(RowHeight));
-                if (stepped)
+                int pressed = ButtonRow(row, new[] { "Code", "Stop" }, new[] { _buttonQuiet, _buttonDanger });
+                if (pressed == 0)
                 {
-                    float w = (row.width - P(16)) / 4f;
-                    GUI.enabled = b.currentStep > 1;
-                    if (GUI.Button(new Rect(row.x, row.y, w, row.height), "Prev", _buttonQuiet)) _app.SetStep(b.id, b.currentStep - 1);
-                    GUI.enabled = true;
-                    GUI.Label(new Rect(row.x + w, row.y, w + P(8), row.height), b.currentStep + " of " + b.stepCount, _textCenter);
-                    GUI.enabled = b.currentStep < b.stepCount;
-                    if (GUI.Button(new Rect(row.x + w * 2f + P(8), row.y, w, row.height), "Next", _buttonQuiet)) _app.SetStep(b.id, b.currentStep + 1);
-                    GUI.enabled = true;
-                    if (GUI.Button(new Rect(row.xMax - w, row.y, w, row.height), "Remove", _buttonDanger)) _app.RemoveBuild(b.id);
+                    SelectCode(exp.Id);
+                    _tab = CodeTab;
                 }
-                else
-                {
-                    float w = Mathf.Min(P(120), row.width);
-                    if (GUI.Button(new Rect(row.xMax - w, row.y, w, row.height), "Remove", _buttonDanger)) _app.RemoveBuild(b.id);
-                }
+                else if (pressed == 1) _app.StopExperience(exp.Id);
             }
-            if (GUI.Button(Next(RowHeight), "Clear everything", _buttonSecondary)) _app.ClearBuilds();
+            if (running.Count > 1 && GUI.Button(Next(RowHeight, 10), "Stop everything", _buttonSecondary)) _app.ClearExperiences();
+
+            if (_failures.Count == 0) return;
+            Heading("Stopped with an error");
+            int open = -1;
+            for (int f = 0; f < _failures.Count; f++)
+            {
+                Experience failed = _failures[f];
+                string error = Truncate(failed.Error ?? "Unknown error", 400);
+                float errorHeight = _textWrapAccent.CalcHeight(new GUIContent(error), _cw - pad * 2f);
+                var card = new Rect(0, _cy, _cw, P(6 + 20 + 6 + RowHeight + 10) + errorHeight);
+                _cy += card.height + P(8);
+                Fill(card, _card);
+                float inner = card.width - pad * 2f;
+                GUI.Label(new Rect(card.x + pad, card.y + P(6), inner, P(20)), failed.Title, _textBold);
+                GUI.Label(new Rect(card.x + pad, card.y + P(26), inner, errorHeight), error, _textWrapAccent);
+                if (GUI.Button(new Rect(card.x + pad, card.yMax - pad - P(RowHeight), inner, P(RowHeight)), "Open in Code", _buttonQuiet)) open = f;
+            }
+            if (open >= 0)
+            {
+                LoadCode(_failures[open]);
+                _tab = CodeTab;
+            }
+            if (GUI.Button(Next(RowHeight, 10), "Forget these", _buttonQuiet)) _failures.Clear();
         }
 
-        static string Summarise(Build b)
+        // ---- Code ----------------------------------------------------------------------------
+
+        bool CodeEdited => _codeText != _codeLoaded;
+
+        /// <summary>Opens a running (or recently failed) program in the Code tab, unless edits are in progress there.</summary>
+        void SelectCode(string id)
         {
-            var counts = new Dictionary<string, int>();
-            foreach (Element e in b.elements)
-            {
-                int n;
-                counts.TryGetValue(e.type, out n);
-                counts[e.type] = n + 1;
-            }
-            var sb = new StringBuilder();
-            sb.Append(b.elements.Count).Append(b.elements.Count == 1 ? " element: " : " elements: ");
-            bool first = true;
-            foreach (var pair in counts)
-            {
-                if (!first) sb.Append(", ");
-                first = false;
-                sb.Append(pair.Value).Append(' ').Append(pair.Key);
-            }
-            return sb.ToString();
+            if (CodeEdited && _codeId != id) return;
+            Experience exp = _app.Runtime.Get(id);
+            if (exp == null)
+                foreach (Experience failed in _failures)
+                    if (failed.Id == id) { exp = failed; break; }
+            if (exp != null) LoadCode(exp);
         }
 
-        // ---- Spec ----------------------------------------------------------------------------
-
-        void DrawSpecTab()
+        void LoadCode(Experience exp)
         {
-            PlanResult plan = _app.LastPlan;
-            Heading("Last plan");
-            if (plan == null)
+            CloseKeyboard();
+            _codeId = exp.Id;
+            _codeTitle = exp.Title ?? "";
+            _codeText = _codeLoaded = exp.Code ?? "";
+            _codeError = exp.IsRunning ? null : exp.Error;
+        }
+
+        void NewProgram()
+        {
+            CloseKeyboard();
+            _codeId = ScratchId;
+            _codeTitle = "Scratch";
+            _codeLoaded = "";
+            _codeText = StarterProgram;
+            _codeError = null;
+        }
+
+        void RunCode()
+        {
+            CloseKeyboard();
+            GUI.FocusControl(null);
+            Experience started = _app.RunProgram(_codeId, _codeTitle, _codeText);
+            if (started == null) { _codeError = "The program did not start."; return; }
+            _codeLoaded = _codeText;
+            // A program that fails while starting is torn down straight away and carries the reason.
+            if (!started.IsRunning || !string.IsNullOrEmpty(started.Error))
             {
-                Line("No plan yet. Send a request and its spec appears here.");
+                _codeError = string.IsNullOrEmpty(started.Error) ? "The program stopped while starting." : started.Error;
+                Notice("The program stopped with an error.");
                 return;
             }
-            if (!ReferenceEquals(plan, _specPlan))
-            {
-                _specPlan = plan;
-                _specJson = SpecJson.Write(plan, true);
-                // IMGUI cannot lay out very long strings; show the head and keep the whole thing for Copy.
-                const int limit = 9000;
-                _specShown = _specJson.Length <= limit ? _specJson : _specJson.Substring(0, limit) + "\n… (" + (_specJson.Length - limit) + " more characters; use Copy)";
-            }
-            Line("\"" + Truncate(_app.LastPrompt, 70) + "\"", _text);
-            string timing = plan.latencyMs > 0 ? Mathf.RoundToInt((float)plan.latencyMs) + " ms" : "";
-            Line((plan.planner ?? "") + (timing.Length > 0 ? " · " + timing : "") + " · " + plan.ops.Count + (plan.ops.Count == 1 ? " op" : " ops"));
-            if (!string.IsNullOrEmpty(plan.error)) Line("Note: " + Truncate(plan.error, 90), _textAccent);
+            _codeError = null;
+            Notice("Running " + started.Title + " · " + started.NodeCount + (started.NodeCount == 1 ? " node." : " nodes."));
+        }
 
-            if (GUI.Button(Next(RowHeight, 8), "Copy JSON", _buttonSecondary))
+        void DrawCodeTab()
+        {
+            IReadOnlyList<Experience> running = _app.Runtime.Experiences;
+            if (_codeId == null)
             {
-                GUIUtility.systemCopyBuffer = _specJson;
-                Notice("Plan JSON copied.");
+                if (running.Count > 0) LoadCode(running[running.Count - 1]); else NewProgram();
             }
-            float height = _textMono.CalcHeight(new GUIContent(_specShown), _cw);
-            GUI.Label(new Rect(0, _cy, _cw, height), _specShown, _textMono);
-            _cy += height + P(8);
+
+            Heading("Program");
+            // Which program: every running experience, plus a blank one to write from scratch.
+            Rect chips = Next(ChipHeight, 8);
+            ScrollState scroll = BeginScroll("code.pick", chips, true);
+            float x = 0f, gap = P(8);
+            Experience pick = null;
+            bool pickNew = false;
+            foreach (Experience exp in running)
+            {
+                float w = WidthOf(_chip, exp.Title);
+                if (GUI.Button(new Rect(x, 0, w, chips.height), exp.Title, exp.Id == _codeId ? _chipBuilt : _chip)) pick = exp;
+                x += w + gap;
+            }
+            float newWidth = WidthOf(_chip, "New");
+            if (GUI.Button(new Rect(x, 0, newWidth, chips.height), "New", _codeId == ScratchId && _app.Runtime.Get(ScratchId) == null ? _chipBuilt : _chip)) pickNew = true;
+            x += newWidth;
+            EndScroll(scroll, x);
+            if (pick != null) LoadCode(pick);
+            else if (pickNew) NewProgram();
+
+            Experience current = _app.Runtime.Get(_codeId);
+            string state = current != null ? "running · " + current.NodeCount + (current.NodeCount == 1 ? " node" : " nodes") : "not running";
+            Line(_codeId + " · " + state + (CodeEdited ? " · edited" : ""));
+
+            bool touch = TouchScreenKeyboard.isSupported;
+            string[] labels = touch ? new[] { "Run", "Edit", "Copy", "Paste" } : new[] { "Run", "Copy", "Paste" };
+            GUIStyle[] styles = touch ? new[] { _buttonPrimary, _buttonSecondary, _buttonQuiet, _buttonQuiet } : new[] { _buttonPrimary, _buttonQuiet, _buttonQuiet };
+            int pressed = ButtonRow(Next(RowHeight, 8), labels, styles);
+            string action = pressed >= 0 ? labels[pressed] : null;
+            if (action == "Run") RunCode();
+            else if (action == "Edit") EditMultiline("code", _codeText);
+            else if (action == "Copy")
+            {
+                GUIUtility.systemCopyBuffer = _codeText;
+                Notice("Program copied.");
+            }
+            else if (action == "Paste")
+            {
+                string pasted = GUIUtility.systemCopyBuffer;
+                if (string.IsNullOrEmpty(pasted)) Notice("The clipboard is empty.");
+                else
+                {
+                    CloseKeyboard();
+                    _codeText = pasted;
+                    Notice("Pasted. Press Run to start it.");
+                }
+            }
+
+            if (!string.IsNullOrEmpty(_codeError)) Wrapped(Truncate(_codeError, 600), _textWrapAccent, 8);
+            if (touch) Wrapped("Edit opens the keyboard on the whole program. For bigger changes, copy it to an editor and paste it back.", _textWrapMuted);
+            MultilineInput("code", ref _codeText);
         }
 
         // ---- Log -----------------------------------------------------------------------------
@@ -266,54 +436,69 @@ namespace Spatail.DevTool
             TextInput("settings.url", Next(RowHeight), ref _fieldUrl, "http://192.168.1.20:8787", TouchScreenKeyboardType.URL);
             TextInput("settings.token", Next(RowHeight), ref _fieldToken, "Access token (optional)", TouchScreenKeyboardType.Default, false, true);
             bool ai = settings.UseAi;
-            int choice = ButtonRow(Next(ChipHeight, 10), new[] { "AI when available", "On-device only" }, new[] { ai ? _segmentOn : _segmentOff, ai ? _segmentOff : _segmentOn });
+            int choice = ButtonRow(Next(ChipHeight, 10), new[] { "AI on", "AI off" }, new[] { ai ? _segmentOn : _segmentOff, ai ? _segmentOff : _segmentOn });
             if (choice >= 0) settings.UseAi = choice == 0;
 
             Heading("You");
             TextInput("settings.name", Next(RowHeight, 10), ref _fieldName, "Name shown to others in a session", TouchScreenKeyboardType.Default);
 
-            Heading("Twin");
-            Line("Solid when the real pump is not here; Ghost or Occluder when it is.");
-            var styles = new GUIStyle[TwinModes.Length];
-            var labels = new string[TwinModes.Length];
-            for (int i = 0; i < TwinModes.Length; i++)
+            Heading("Stand-in");
+            Wrapped("A virtual pump station for demos and tests where there is no machine. It is drawn by the app, not sensed; turn it off to work with the place as it is.", _textWrapMuted);
+            bool standIn = settings.StandIn;
+            int standInChoice = ButtonRow(Next(ChipHeight, 10), new[] { "Stand-in on", "Stand-in off" }, new[] { standIn ? _segmentOn : _segmentOff, standIn ? _segmentOff : _segmentOn });
+            if (standInChoice >= 0 && (standInChoice == 0) != standIn)
             {
-                labels[i] = TwinModes[i].ToString();
-                styles[i] = _app.Twin.Mode == TwinModes[i] ? _segmentOn : _segmentOff;
+                if (_app.IsMovingStation) _app.SetMovingStation(false);
+                _app.SetStandIn(standInChoice == 0);
             }
-            int mode = ButtonRow(Next(ChipHeight, 10), labels, styles);
-            if (mode >= 0) _app.SetTwinMode(TwinModes[mode]);
 
-            Heading("Pump placement");
-            bool moving = _app.IsMovingStation;
-            int action = ButtonRow(Next(RowHeight), new[] { moving ? "Drop here" : "Move pump", "In front of me" }, new[] { moving ? _buttonPrimary : _buttonSecondary, _buttonSecondary });
-            if (action == 0)
+            if (settings.StandIn)
             {
-                _app.SetMovingStation(!moving);
-                if (!moving) _drawerOpen = false; // get out of the way so the floor is reachable
+                Line("How it is drawn");
+                var styles = new GUIStyle[TwinModes.Length];
+                var labels = new string[TwinModes.Length];
+                for (int i = 0; i < TwinModes.Length; i++)
+                {
+                    labels[i] = TwinModes[i].ToString();
+                    styles[i] = settings.TwinMode == TwinModes[i] ? _segmentOn : _segmentOff;
+                }
+                int mode = ButtonRow(Next(ChipHeight, 10), labels, styles);
+                if (mode >= 0) _app.SetTwinMode(TwinModes[mode]);
+
+                Line("Where it stands");
+                bool moving = _app.IsMovingStation;
+                int action = ButtonRow(Next(RowHeight), new[] { moving ? "Drop here" : "Move", "In front of me" }, new[] { moving ? _buttonPrimary : _buttonSecondary, _buttonSecondary });
+                if (action == 0)
+                {
+                    _app.SetMovingStation(!moving);
+                    if (!moving) _drawerOpen = false; // get out of the way so the floor is reachable
+                }
+                else if (action == 1)
+                {
+                    _app.ReplaceStation();
+                    Notice("Stand-in placed in front of you.");
+                }
+                int turn = ButtonRow(Next(RowHeight, 10), new[] { "Turn left 15°", "Turn right 15°" }, new[] { _buttonQuiet, _buttonQuiet });
+                if (turn == 0) _app.RotateStation(-15f);
+                else if (turn == 1) _app.RotateStation(15f);
             }
-            else if (action == 1) PlaceInFront();
-            int turn = ButtonRow(Next(RowHeight, 10), new[] { "Turn left 15°", "Turn right 15°" }, new[] { _buttonQuiet, _buttonQuiet });
-            if (turn == 0) _app.RotateStation(-15f);
-            else if (turn == 1) _app.RotateStation(15f);
 
             Heading("Content");
-            if (GUI.Button(Next(RowHeight, 10), "Clear everything", _buttonDanger)) _app.ClearBuilds();
-
-            Line("Spatail DevTool " + Application.version + " · " + _app.Platform.DeviceName + " · site: " + _app.Site.name, _textSmall);
-        }
-
-        void PlaceInFront()
-        {
-            if (_app.Platform.Room == null) return;
-            RoomModel raw = _app.Platform.Room.Capture();
-            if (_app.Head != null)
+            if (GUI.Button(Next(RowHeight), "Clear everything", _buttonDanger))
             {
-                raw.userPosition = _app.Head.transform.position.ToCore();
-                raw.userForward = _app.Head.transform.forward.ToCore();
+                _app.ClearExperiences();
+                Notice("Everything was removed.");
             }
-            _app.PlaceStation(SiteBinder.SuggestStationPose(raw, _app.Site));
-            Notice("Pump placed in front of you.");
+            Wrapped("Save episode sends the last request (camera frame, depth samples, surfaces, what was said) and what was built for it to the planner service, to keep as a test case from a real place.", _textWrapMuted);
+            GUI.enabled = _app.Director.LastRequest != null;
+            if (GUI.Button(Next(RowHeight, 10), "Save episode", _buttonSecondary))
+            {
+                _app.SaveEpisode();
+                Notice(_app.Planner.IsConfigured ? "Saving the episode; the Log tab shows the result." : "Set the planner address first.");
+            }
+            GUI.enabled = true;
+
+            Line("Spatail DevTool " + Application.version + " · " + _app.Platform.DeviceName, _textSmall);
         }
 
         // ---- Link ----------------------------------------------------------------------------

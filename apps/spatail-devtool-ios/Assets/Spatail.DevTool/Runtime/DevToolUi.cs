@@ -8,15 +8,17 @@ namespace Spatail.DevTool
     /// The dev tool's screen UI, drawn over the AR view (or over the simulator in the editor).
     ///
     /// Everything a thumb needs sits at the bottom: suggested prompts, the reply, and the prompt row with the tools,
-    /// microphone and send buttons. A status strip at the top shows what the app, planner, room and session are
-    /// doing. The tools drawer holds the developer tabs: Room, Builds, Spec, Log, Settings and Link.
+    /// microphone and send buttons. A status strip at the top shows what the app, builder, sensor and session are
+    /// doing. The tools drawer holds the developer tabs: Space, Experiences, Code, Log, Settings and Link.
     ///
     /// Written in IMGUI on purpose: it needs no assets or UI packages and behaves the same under either Unity input
     /// backend. Layout is manual and in points, so text stays crisp on any display density.
     /// </summary>
     public sealed partial class DevToolUi : MonoBehaviour
     {
-        static readonly string[] DemoPrompts =
+        // The same suggestions, under the same rule, as the headset's prompt bar (PromptBar in the shared package).
+        /// <summary>Requests the recorded demo can answer next to the stand-in pump.</summary>
+        static readonly string[] StandInPrompts =
         {
             "Build me a walkthrough for this pump",
             "Show me how the water flows",
@@ -26,12 +28,22 @@ namespace Spatail.DevTool
             "Bring Sara in",
         };
 
+        /// <summary>The kind of thing to ask anywhere, once the planner is connected.</summary>
+        static readonly string[] OpenPrompts =
+        {
+            "What am I looking at?",
+            "How far is that from here?",
+            "Mark a two metre zone around this",
+        };
+
         const float RowHeight = 44f;      // primary touch targets, in points
         const float ChipHeight = 34f;
 
         SpatailApp _app;
         ISpeechInput _speech;
-        IRoomProvider _room;
+        ISpaceSensor _sensor;
+        /// <summary>The ARKit sensor when running on a device; null in the editor simulator.</summary>
+        ArSensor _ar;
 
         string _prompt = "";
         bool _listening;
@@ -43,17 +55,20 @@ namespace Spatail.DevTool
         Rect _safe;
         readonly List<Rect> _uiRects = new List<Rect>();
         readonly List<Rect> _uiRectsBuilding = new List<Rect>();
+        readonly List<string> _picks = new List<string>();
 
-        /// <summary>Adds the dev tool UI to a running app. Speech and room may be null (as in the editor simulator).</summary>
-        public static DevToolUi Attach(SpatailApp app, ISpeechInput speech, IRoomProvider room)
+        /// <summary>Adds the dev tool UI to a running app. Speech and sensor may be null (as in the editor simulator).</summary>
+        public static DevToolUi Attach(SpatailApp app, ISpeechInput speech, ISpaceSensor sensor)
         {
             var ui = app.gameObject.AddComponent<DevToolUi>();
             ui._app = app;
             ui._speech = speech;
-            ui._room = room ?? app.Platform.Room;
+            ui._sensor = sensor ?? app.Sensor;
+            ui._ar = ui._sensor as ArSensor;
             ui.useGUILayout = false;
             ui.LoadSettingsFields();
-            app.Planned += ui.OnPlanned;
+            app.Built += ui.OnBuilt;
+            app.Runtime.Failed += ui.OnFailed;
             return ui;
         }
 
@@ -66,10 +81,22 @@ namespace Spatail.DevTool
             return false;
         }
 
-        void OnPlanned(string prompt, PlanResult plan)
+        void OnBuilt(string prompt, BuildResult result)
         {
             if (!string.IsNullOrEmpty(prompt)) _used.Add(prompt);
+            // Show the program that was just written when the Code tab is next opened.
+            if (result != null && result.HasProgram && !string.IsNullOrEmpty(result.id)) SelectCode(result.id);
         }
+
+        void OnFailed(Experience experience)
+        {
+            _failures.Insert(0, experience);
+            if (_failures.Count > 5) _failures.RemoveAt(_failures.Count - 1);
+            // If its code is open, show why it stopped next to it.
+            if (experience.Id == _codeId) _codeError = experience.Error;
+        }
+
+        string SensorStatus => _sensor != null ? _sensor.Status : "No sensor";
 
         void Update()
         {
@@ -152,9 +179,8 @@ namespace Spatail.DevTool
             switch (_app.State)
             {
                 case AppState.Starting: dot = Muted; state = "Starting"; break;
-                case AppState.Scanning: dot = Accent; state = "Reading the room"; break;
-                case AppState.Thinking: dot = Warning; state = "Building"; break;
-                default: dot = Theme.Success; state = _app.IsMovingStation ? "Moving the pump" : "Ready"; break;
+                case AppState.Building: dot = Warning; state = "Building"; break;
+                default: dot = Theme.Success; state = _app.IsMovingStation ? "Moving the stand-in" : "Ready"; break;
             }
             var dotRect = new Rect(rect.x + pad, rect.y + P(13), P(9), P(9));
             if (Event.current.type == EventType.Repaint)
@@ -165,16 +191,17 @@ namespace Spatail.DevTool
                 GUI.color = previous;
             }
 
-            string planner = _app.Planner != null && _app.Planner.RemoteActive ? "AI planner" : "On-device planner";
-            PlanResult last = _app.LastPlan;
-            if (last != null && !string.IsNullOrEmpty(last.planner))
-                planner += " · last: " + last.planner + (last.latencyMs > 0 ? " " + Mathf.RoundToInt((float)last.latencyMs) + " ms" : "");
+            // Who builds: the planner service when it is connected, else the recorded demo, which only knows the stand-in.
+            string builder = _app.Director.RemoteActive ? "AI builder"
+                : (_app.Settings.StandIn ? "Recorded demo (no planner)" : "No planner connected");
+            BuildResult last = _app.LastResult;
+            if (last != null && !string.IsNullOrEmpty(last.builder))
+                builder += " · last: " + last.builder + (last.latencyMs > 0 ? " " + Mathf.RoundToInt((float)last.latencyMs) + " ms" : "");
 
             float textX = dotRect.xMax + P(8);
             float textWidth = rect.xMax - pad - textX;
-            GUI.Label(new Rect(textX, rect.y + P(7), textWidth, P(20)), state + " · " + planner, _text);
-            string room = _room != null ? _room.Status : "No room provider";
-            GUI.Label(new Rect(textX, rect.y + P(28), textWidth, P(18)), room + " · " + _app.SessionStatus, _textSmall);
+            GUI.Label(new Rect(textX, rect.y + P(7), textWidth, P(20)), state + " · " + builder, _text);
+            GUI.Label(new Rect(textX, rect.y + P(28), textWidth, P(18)), SensorStatus + " · " + _app.SessionStatus, _textSmall);
 
             // The whole strip opens and closes the tools drawer.
             if (GUI.Button(rect, GUIContent.none, GUIStyle.none)) _drawerOpen = !_drawerOpen;
@@ -185,8 +212,10 @@ namespace Spatail.DevTool
         Rect DrawBottomBar(float margin, float bottom)
         {
             float pad = P(10);
-            float row = P(RowHeight), chip = P(ChipHeight), replyHeight = P(36);
-            float height = pad + chip + P(8) + replyHeight + P(6) + row + pad;
+            CollectSuggestions();
+            float row = P(RowHeight), chip = _picks.Count > 0 ? P(ChipHeight) : 0f, replyHeight = P(36);
+            float chipGap = chip > 0f ? P(8) : 0f;
+            float height = pad + chip + chipGap + replyHeight + P(6) + row + pad;
             var rect = new Rect(_safe.x + margin, bottom - height, _safe.width - margin * 2f, height);
             Claim(rect);
             Fill(rect, _panel);
@@ -194,8 +223,8 @@ namespace Spatail.DevTool
             float x = rect.x + pad, width = rect.width - pad * 2f;
             float y = rect.y + pad;
 
-            DrawSuggestions(new Rect(x, y, width, chip));
-            y += chip + P(8);
+            if (chip > 0f) DrawSuggestions(new Rect(x, y, width, chip));
+            y += chip + chipGap;
             DrawReply(new Rect(x + P(4), y, width - P(8), replyHeight));
             y += replyHeight + P(6);
 
@@ -212,7 +241,7 @@ namespace Spatail.DevTool
             if (GUI.Button(mic, _listening ? "Stop" : "Mic", _listening ? _buttonRoundHot : (canSpeak ? _buttonRound : _buttonRoundQuiet)))
                 ToggleListening(canSpeak);
 
-            bool ready = _app.State == AppState.Ready || _app.State == AppState.Thinking;
+            bool ready = _app.State != AppState.Starting;
             if (TextInput("prompt", field, ref _prompt, _listening ? "Listening…" : "Just say what you need", TouchScreenKeyboardType.Default, true))
                 Send();
             GUI.enabled = ready && _prompt.Trim().Length > 0;
@@ -221,62 +250,70 @@ namespace Spatail.DevTool
             return rect;
         }
 
+        /// <summary>
+        /// With the stand-in in the room, what the recorded demo can do; otherwise, once the planner is connected,
+        /// the open-ended kind of request it handles; otherwise nothing, because nothing would answer.
+        /// </summary>
+        void CollectSuggestions()
+        {
+            _picks.Clear();
+            string[] source = _app.Settings.StandIn ? StandInPrompts : (_app.Director.RemoteActive ? OpenPrompts : null);
+            if (source == null) return;
+            foreach (string prompt in source)
+                if (!_used.Contains(prompt)) _picks.Add(prompt);
+            // Prompts already tried stay available at the end of the row.
+            foreach (string prompt in source)
+                if (_used.Contains(prompt)) _picks.Add(prompt);
+        }
+
         void DrawSuggestions(Rect rect)
         {
-            var picks = new List<string>();
-            Build stepped = _app.Store.LatestStepped;
-            if (stepped != null)
-            {
-                if (stepped.currentStep < stepped.stepCount) picks.Add("Next");
-                if (stepped.currentStep > 1) picks.Add("Back");
-            }
-            foreach (string prompt in DemoPrompts)
-                if (!_used.Contains(prompt)) picks.Add(prompt);
-            if (_app.Store.Builds.Count > 0)
-            {
-                picks.Add("Make it bigger");
-                picks.Add("Clear everything");
-            }
-            // Prompts already tried stay available at the end of the row.
-            foreach (string prompt in DemoPrompts)
-                if (_used.Contains(prompt)) picks.Add(prompt);
-
             ScrollState scroll = BeginScroll("suggestions", rect, true);
             float x = 0f, gap = P(8);
             bool enabled = _app.State == AppState.Ready;
-            foreach (string pick in picks)
+            string chosen = null;
+            foreach (string pick in _picks)
             {
                 float w = WidthOf(_chip, pick);
                 GUI.enabled = enabled;
-                if (GUI.Button(new Rect(x, 0, w, rect.height), pick, _chip))
-                {
-                    _prompt = pick;
-                    Send();
-                }
+                if (GUI.Button(new Rect(x, 0, w, rect.height), pick, _chip)) chosen = pick;
                 GUI.enabled = true;
                 x += w + gap;
             }
             EndScroll(scroll, x - gap);
+            if (chosen != null)
+            {
+                _prompt = chosen;
+                Send();
+            }
         }
 
         void DrawReply(Rect rect)
         {
             string reply;
             GUIStyle style = _textWrap;
-            PlanResult last = _app.LastPlan;
+            BuildResult last = _app.LastResult;
             string chip = null;
 
             if (Time.unscaledTime < _noticeUntil) { reply = _notice; style = _textWrapAccent; }
-            else if (_app.State == AppState.Thinking) { reply = "Building…  " + Truncate(_app.LastPrompt, 60); style = _textWrapMuted; }
-            else if (_app.State == AppState.Starting) { reply = _room != null ? _room.Status : "Starting"; style = _textWrapMuted; }
-            else if (_app.State == AppState.Scanning) { reply = "Reading the room…"; style = _textWrapMuted; }
-            else if (_app.IsMovingStation) { reply = "Drag on the floor to move the pump, twist with two fingers to turn it, lift to drop."; style = _textWrapAccent; }
+            else if (_app.State == AppState.Building) { reply = "Looking and building…  " + Truncate(_app.LastPrompt, 60); style = _textWrapMuted; }
+            else if (_app.State == AppState.Starting) { reply = SensorStatus; style = _textWrapMuted; }
+            else if (_app.IsMovingStation) { reply = "Drag on the floor to move the stand-in, twist with two fingers to turn it, lift to drop."; style = _textWrapAccent; }
+            else if (last != null && last.builder == "experience")
+            {
+                // A running program handled a spoken command itself; there is no reply text.
+                reply = "\u201C" + Truncate(_app.LastPrompt, 60) + "\u201D  handled by the running experience.";
+                style = _textWrapMuted;
+            }
             else if (last != null)
             {
                 reply = last.reply ?? "";
-                if (!string.IsNullOrEmpty(last.chip)) chip = "Built " + last.chip;
+                if (!string.IsNullOrEmpty(last.error) && reply.Length == 0) reply = last.error;
+                if (last.HasProgram && !string.IsNullOrEmpty(last.title)) chip = "Built " + last.title;
             }
-            else { reply = "Ask for a walkthrough, the flow, fault history, a dashboard, a checklist, or bring someone in."; style = _textWrapMuted; }
+            else if (_app.Director.RemoteActive) { reply = "Point the phone at something and say what you need."; style = _textWrapMuted; }
+            else if (_app.Settings.StandIn) { reply = "No planner connected: the recorded demo answers the suggestions above. Set the planner address in Tools, Settings."; style = _textWrapMuted; }
+            else { reply = "Nothing can build yet. Set the planner address in Tools, Settings."; style = _textWrapMuted; }
 
             float chipWidth = 0f;
             if (chip != null)

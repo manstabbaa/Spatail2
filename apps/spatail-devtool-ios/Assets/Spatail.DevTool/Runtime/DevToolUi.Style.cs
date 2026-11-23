@@ -17,6 +17,7 @@ namespace Spatail.DevTool
         GUIStyle _panel, _card, _strip;
         GUIStyle _buttonPrimary, _buttonSecondary, _buttonQuiet, _buttonDanger, _buttonRound, _buttonRoundQuiet, _buttonRoundHot;
         GUIStyle _chip, _chipBuilt, _tabOn, _tabOff, _field, _fieldEmpty, _segmentOn, _segmentOff, _badge;
+        GUIStyle _code;
 
         static readonly Dictionary<string, Texture2D> Textures = new Dictionary<string, Texture2D>();
 
@@ -102,6 +103,17 @@ namespace Spatail.DevTool
             _field.focused.textColor = Ink;
             _fieldEmpty = new GUIStyle(_field);
             _fieldEmpty.normal.textColor = _fieldEmpty.active.textColor = _fieldEmpty.hover.textColor = Muted;
+
+            // Program text: small, wrapped, on a card, the same whether it is being read or edited.
+            _code = Button(SurfaceDim, SurfaceDim, Clear, Ink, 12, 11.5f, FontStyle.Normal, 10);
+            _code.alignment = TextAnchor.UpperLeft;
+            _code.wordWrap = true;
+            _code.padding = new RectOffset(Pi(10), Pi(10), Pi(8), Pi(8));
+            _code.focused.background = _code.normal.background;
+            _code.focused.textColor = Ink;
+            // The text cursor and selection, for the fields and the code area on desktop.
+            GUI.skin.settings.cursorColor = Ink;
+            GUI.skin.settings.selectionColor = AccentSoft;
         }
 
         GUIStyle Text(Color color, float points, FontStyle fontStyle)

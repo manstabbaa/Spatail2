@@ -10,8 +10,8 @@ using UnityEngine.InputSystem.XR;
 namespace Spatail.DevTool
 {
     /// <summary>
-    /// Builds the AR Foundation rig in code and hands Spatail its platform services: the AR camera as the head, planes
-    /// as the room, touch as the pointer and on-device speech recognition.
+    /// Builds the AR Foundation rig in code and hands Spatail its platform services: the AR camera as the head, ARKit
+    /// as the live space sensor, touch as the pointer and on-device speech recognition.
     /// The rig mirrors what AR Foundation's own "XR Origin (Mobile AR)" and "AR Session" menu items create.
     /// </summary>
     public static class ArPlatform
@@ -41,7 +41,7 @@ namespace Spatail.DevTool
             camera.nearClipPlane = 0.05f;
             camera.farClipPlane = 30f;
             cameraObject.AddComponent<AudioListener>();
-            cameraObject.AddComponent<ARCameraManager>();
+            var cameraManager = cameraObject.AddComponent<ARCameraManager>();
             cameraObject.AddComponent<ARCameraBackground>();
             AddPoseDriver(cameraObject);
 
@@ -53,9 +53,16 @@ namespace Spatail.DevTool
             var planes = originObject.AddComponent<ARPlaneManager>();
             planes.requestedDetectionMode = PlaneDetectionMode.Horizontal | PlaneDetectionMode.Vertical;
 
-            var room = originObject.AddComponent<ArRoomProvider>();
-            room.Planes = planes;
-            room.Camera = camera;
+            // On the same object as the plane manager, which is how ARRaycastManager finds the planes to answer
+            // world rays with (ARPlaneManager.OnEnable registers itself with it).
+            var raycasts = originObject.AddComponent<ARRaycastManager>();
+
+            var sensor = originObject.AddComponent<ArSensor>();
+            sensor.Planes = planes;
+            sensor.Raycasts = raycasts;
+            sensor.CameraManager = cameraManager;
+            sensor.Camera = camera;
+            sensor.UseMesh(AddMeshing(originObject));
 
             var pointer = cameraObject.AddComponent<TouchPointer>();
             pointer.Camera = camera;
@@ -67,7 +74,7 @@ namespace Spatail.DevTool
             var services = new PlatformServices
             {
                 Head = camera,
-                Room = room,
+                Sensor = sensor,
                 Speech = speech,
                 DeviceName = "ios",
                 WorldUi = false,
@@ -76,11 +83,31 @@ namespace Spatail.DevTool
             services.Pointers.Add(pointer);
 
             SpatailApp app = SpatailApp.Launch(services);
-            DevToolUi ui = DevToolUi.Attach(app, speech, room);
+            DevToolUi ui = DevToolUi.Attach(app, speech, sensor);
             pointer.IsOverUi = ui.IsOverUi;
             pointer.IsMoveMode = () => app.IsMovingStation;
 
             return app;
+        }
+
+        /// <summary>
+        /// Scene reconstruction, which only devices with a LiDAR scanner provide. The manager must sit on a child of
+        /// the XR Origin, and switches itself off when the device has no meshing subsystem. Each piece of mesh is a
+        /// copy of the template: geometry only, nothing drawn and no colliders.
+        /// </summary>
+        static ARMeshManager AddMeshing(GameObject originObject)
+        {
+            var template = new GameObject("AR Mesh Template");
+            template.SetActive(false);
+            template.transform.SetParent(originObject.transform, false);
+            var filter = template.AddComponent<MeshFilter>();
+
+            var meshObject = new GameObject("AR Meshes");
+            meshObject.transform.SetParent(originObject.transform, false);
+            var meshes = meshObject.AddComponent<ARMeshManager>();
+            meshes.meshPrefab = filter;
+            meshes.normals = false;
+            return meshes;
         }
 
         static void AddPoseDriver(GameObject cameraObject)

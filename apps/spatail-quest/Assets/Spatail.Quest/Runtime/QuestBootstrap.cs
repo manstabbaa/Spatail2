@@ -6,7 +6,8 @@ namespace Spatail.Quest
     /// Starts Spatail when the app starts. No scene objects are involved: the scene is empty and everything is built
     /// from code, so there are no prefab or scene references to break.
     ///
-    /// On a headset this launches the Quest platform (passthrough, room understanding, controllers and hands).
+    /// On a headset this launches the Quest platform (passthrough, live sensing, controllers and hands). The same
+    /// happens in the Editor when an XR runtime is driving it: a headset over Link, or the Meta XR Simulator.
     /// In the Editor with no XR device active it launches the desktop simulator instead, so pressing Play works
     /// without hardware.
     /// </summary>

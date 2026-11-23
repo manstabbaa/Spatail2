@@ -8,6 +8,8 @@ namespace Spatail.Quest.EditorTools
 {
     /// <summary>
     /// Final touches to the generated Android manifest, after Unity's and Meta's own processing:
+    /// - the Spatial data and headset camera permissions that live sensing asks for at runtime (Meta's own step adds
+    ///   them from the project config; this makes sure they are there whatever state that config is in);
     /// - RECORD_AUDIO, for speech input (Unity only adds it automatically when the Microphone class is used);
     /// - a package-visibility query for speech recognition services, without which Android 11+ reports that
     ///   recognition is unavailable;
@@ -34,6 +36,8 @@ namespace Spatail.Quest.EditorTools
             XmlElement manifest = doc.DocumentElement;
             if (manifest == null) return;
 
+            AddPermission(doc, manifest, OVRPermissionsRequester.ScenePermission);                   // depth ray casting
+            AddPermission(doc, manifest, OVRPermissionsRequester.PassthroughCameraAccessPermission); // passthrough camera frames
             AddPermission(doc, manifest, "android.permission.RECORD_AUDIO");
             AddPermission(doc, manifest, "android.permission.INTERNET");
             AddSpeechQuery(doc, manifest);

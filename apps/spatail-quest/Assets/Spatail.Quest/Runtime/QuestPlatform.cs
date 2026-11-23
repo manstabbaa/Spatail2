@@ -1,19 +1,20 @@
-using Meta.XR.MRUtilityKit;
 using UnityEngine;
 
 namespace Spatail.Quest
 {
     /// <summary>
-    /// Assembles everything Spatail needs on a Meta Quest: the camera rig with passthrough, MR Utility Kit for room
-    /// understanding, controller and hand pointers, the system keyboard and speech input. Built entirely at runtime.
+    /// Assembles everything Spatail needs on a Meta Quest: the camera rig with passthrough, live sensing (depth and
+    /// the passthrough camera), controller and hand pointers, the system keyboard and speech input. Built entirely
+    /// at runtime.
     ///
     /// Components are added while their GameObject is inactive, configured, and only then activated. That way
-    /// OVRManager and MRUK see the intended settings in their Awake, exactly as if they had been set up in a scene.
+    /// OVRManager and the others see the intended settings in their Awake, exactly as if they had been set up in a
+    /// scene.
     /// </summary>
     public static class QuestPlatform
     {
         public static OVRCameraRig Rig { get; private set; }
-        public static MrukRoomProvider Room { get; private set; }
+        public static QuestSensor Sensor { get; private set; }
 
         public static SpatailApp Launch()
         {
@@ -39,20 +40,15 @@ namespace Spatail.Quest
             ConfigureCamera(Rig.rightEyeAnchor.GetComponent<Camera>());
             if (Object.FindAnyObjectByType<AudioListener>() == null) head.gameObject.AddComponent<AudioListener>();
 
-            // ---- room understanding ----------------------------------------------------------
-            var mrukObject = new GameObject("Spatail MRUK");
-            mrukObject.SetActive(false);
-            Object.DontDestroyOnLoad(mrukObject);
-            var mruk = mrukObject.AddComponent<MRUK>();
-            // The provider drives loading itself so it can ask for permission first and report what happened.
-            mruk.SceneSettings = new MRUK.MRUKSettings
-            {
-                DataSource = MRUK.SceneDataSource.Device,
-                LoadSceneOnStartup = false,
-            };
-            Room = mrukObject.AddComponent<MrukRoomProvider>();
-            Room.Rig = Rig;
-            mrukObject.SetActive(true);
+            // ---- live sensing ------------------------------------------------------------------
+            // No MRUK component and no stored room: MR Utility Kit's native library starts by itself, and the sensor
+            // adds the depth ray caster and the passthrough camera once it knows what this headset supports.
+            var sensorObject = new GameObject("Spatail Sensor");
+            sensorObject.SetActive(false);
+            Object.DontDestroyOnLoad(sensorObject);
+            Sensor = sensorObject.AddComponent<QuestSensor>();
+            Sensor.Rig = Rig;
+            sensorObject.SetActive(true);
 
             // ---- input ---------------------------------------------------------------------------
             var inputObject = new GameObject("Spatail Quest Input");
@@ -61,7 +57,7 @@ namespace Spatail.Quest
             var services = new PlatformServices
             {
                 Head = head,
-                Room = Room,
+                Sensor = Sensor,
                 DeviceName = "quest",
                 WorldUi = true,
                 // Right thumbstick left/right turns the pump while it is being moved.

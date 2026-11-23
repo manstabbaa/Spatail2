@@ -12,6 +12,7 @@
     "com.meta.xr.mrutilitykit": "209.0.0",
     "com.meta.xr.sdk.core": "209.0.0",
     "com.spatail.core": "file:../../../packages/com.spatail.core",
+    "com.unity.recorder": "5.1.8",
     "com.unity.xr.management": "4.7.0",
     "com.unity.xr.openxr": "1.18.0",
     "com.unity.modules.ai": "1.0.0",

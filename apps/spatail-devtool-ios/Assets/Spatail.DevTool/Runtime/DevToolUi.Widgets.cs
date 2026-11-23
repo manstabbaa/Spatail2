@@ -62,6 +62,48 @@ namespace Spatail.DevTool
             return submitted;
         }
 
+        /// <summary>
+        /// A block of editable text as tall as its content. On desktop it is an ordinary text area. On devices with
+        /// an on-screen keyboard it is shown read-only and edited as a whole in the system keyboard's multi-line
+        /// editor, opened with <see cref="EditMultiline"/>.
+        /// </summary>
+        void MultilineInput(string id, ref string value)
+        {
+            value = value ?? "";
+            if (_committedField == id)
+            {
+                value = _committedText ?? "";
+                _committedField = null;
+            }
+            bool touch = TouchScreenKeyboard.isSupported;
+            if (touch && _keyboard != null && _keyboardField == id) value = _keyboard.text ?? "";
+
+            // IMGUI cannot lay out very long strings; past the limit the head is shown and the rest still runs and copies.
+            const int limit = 9000;
+            bool tooLong = value.Length > limit;
+            if (touch || tooLong)
+            {
+                string shown = tooLong ? value.Substring(0, limit) + "\n… (" + (value.Length - limit) + " more characters, not shown)" : value;
+                float height = Mathf.Max(P(60), _code.CalcHeight(new GUIContent(shown), _cw));
+                GUI.Label(new Rect(0, _cy, _cw, height), shown, _code);
+                _cy += height + P(8);
+                return;
+            }
+
+            float areaHeight = Mathf.Max(P(160), _code.CalcHeight(new GUIContent(value), _cw));
+            GUI.SetNextControlName(id);
+            value = GUI.TextArea(new Rect(0, _cy, _cw, areaHeight), value, _code);
+            _cy += areaHeight + P(8);
+        }
+
+        /// <summary>Opens the system keyboard's multi-line editor on a <see cref="MultilineInput"/>.</summary>
+        void EditMultiline(string id, string value)
+        {
+            if (!TouchScreenKeyboard.isSupported) return;
+            _keyboardField = id;
+            _keyboard = TouchScreenKeyboard.Open(value ?? "", TouchScreenKeyboardType.Default, false, true, false, false, "");
+        }
+
         void PollKeyboard()
         {
             if (_keyboard == null) return;

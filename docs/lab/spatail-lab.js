@@ -128,13 +128,26 @@
 
   // Straight tube segments through points (given in Unity coordinates); UV.x carries distance along the path in
   // metres and UV.y runs around the tube, which is what the flow shader expects.
-  function tubeGeometry(points, radius, sides) {
+  // `toward` (optional, Three space) is where the viewer stands: the seam where the chevrons point downstream is
+  // turned to face it, so the direction also reads in a still frame.
+  function tubeGeometry(points, radius, sides, toward) {
     var positions = [], normals = [], uvs = [], dist = 0, up = new THREE.Vector3(0, 1, 0);
     for (var s = 0; s < points.length - 1; s++) {
       var a = toV3(points[s]), b = toV3(points[s + 1]), axis = b.clone().sub(a), len = axis.length();
       if (len < 1e-5) continue;
       var g = new THREE.CylinderGeometry(radius, radius, len, sides, 1, true).toNonIndexed();
-      var m = new THREE.Matrix4().compose(a.clone().add(b).multiplyScalar(0.5), new THREE.Quaternion().setFromUnitVectors(up, axis.normalize()), new THREE.Vector3(1, 1, 1));
+      var mid = a.clone().add(b).multiplyScalar(0.5), turn = new THREE.Quaternion().setFromUnitVectors(up, axis.normalize());
+      if (toward) {
+        // u = 0 leaves the cylinder along its local +Z; twist about the axis until that points at the viewer.
+        var want = toward.clone().sub(mid); want.addScaledVector(axis, -want.dot(axis));
+        var have = new THREE.Vector3(0, 0, 1).applyQuaternion(turn);
+        if (want.lengthSq() > 1e-8) {
+          want.normalize();
+          var angle = Math.atan2(new THREE.Vector3().crossVectors(have, want).dot(axis), have.dot(want));
+          turn.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle));
+        }
+      }
+      var m = new THREE.Matrix4().compose(mid, turn, new THREE.Vector3(1, 1, 1));
       g.applyMatrix4(m);
       var p = g.attributes.position.array, n = g.attributes.normal.array, uv = g.attributes.uv.array;
       for (var i = 0; i < p.length; i++) { positions.push(p[i]); normals.push(n[i]); }
@@ -185,14 +198,22 @@
   function floorPlane(id, centre, width, depth) {
     return { id: id, kind: 'floor', label: 'Floor', position: centre, rotation: [0, 0, 0, 1], size: [width, 0, depth] };
   }
-  // A room open toward the user's back: back wall plus two side walls, like a stage set.
+  // The wall behind the wearer and the ceiling are real to the sensors but hidden from the overview camera, which
+  // looks in from that side.
+  function backdrop(plane) { plane.backdrop = true; return plane; }
+  function ceilingPlane(centre, width, depth) {
+    // Turned over, so its local up points down into the room.
+    return backdrop({ id: 'ceiling', kind: 'ceiling', label: 'Ceiling', position: centre, rotation: [1, 0, 0, 0], size: [width, 0, depth] });
+  }
   function roomShell(width, depth, height, backZ) {
     var mid = backZ - depth / 2;
     return [
       floorPlane('floor', [0, 0, mid], width, depth),
       wallPlane('wall-back', 'Wall', [0, height / 2, backZ], 180, width, height),
       wallPlane('wall-left', 'Wall', [-width / 2, height / 2, mid], 90, depth, height),
-      wallPlane('wall-right', 'Wall', [width / 2, height / 2, mid], -90, depth, height)
+      wallPlane('wall-right', 'Wall', [width / 2, height / 2, mid], -90, depth, height),
+      backdrop(wallPlane('wall-front', 'Wall', [0, height / 2, backZ - depth], 0, width, height)),
+      ceilingPlane([0, height, mid], width, depth)
     ];
   }
 
@@ -201,9 +222,13 @@
     data.room.entities.forEach(function (e) {
       if (e.kind === 'floor' || e.kind === 'wall') { planes.push({ id: e.id, kind: e.kind, label: e.label, position: e.position, rotation: e.rotation, size: e.size }); return; }
       if (!e.virtual) return;
+      // Plane detection finds a bench top on a headset whether or not anything is known about the bench.
+      if (e.kind === 'table') planes.push({ id: e.id + '-top', kind: 'table', label: 'Table', position: e.position, rotation: e.rotation, size: e.size });
       props.push(e);
       if (e.shapes) objects.push({ origin: e.origin, rotation: e.rotation, shapes: e.shapes, propId: e.id, label: e.label });
     });
+    // The film's room has three walls; close it behind the wearer the same way the generated rooms are.
+    planes.push(backdrop(wallPlane('wall-front', 'Wall', [0, 1.4, -5.05], 0, 7, 2.8)), ceilingPlane([0, 2.8, -2.05], 7, 6));
     return { planes: planes, objects: objects, props: props, user: { position: [-0.9, 1.6, -2.5], yaw: 22, pitch: 16 }, bounds: [3.3, 3.2, -4.9, 0.8], orbit: [0, 0.6, 0.2] };
   }
 
@@ -342,8 +367,13 @@
 
   function street(seed) {
     var R = rng(seed * 15485863 + 3), L = 13, frontZ = 2.4, kerbZ = -1.1;
-    var planes = [floorPlane('floor', [0, 0, (frontZ + kerbZ) / 2], L, frontZ - kerbZ), wallPlane('wall-shopfront', 'Wall', [0, 1.8, frontZ], 180, L, 3.6)];
+    var planes = [floorPlane('floor', [0, 0, (frontZ + kerbZ) / 2], L, frontZ - kerbZ), wallPlane('wall-shopfront', 'Wall', [0, 1.8, frontZ], 180, L, 3.6),
+      backdrop(wallPlane('wall-far', 'Wall', [0, 2.4, kerbZ - 6.4], 0, L, 4.8))];
     var objects = [];
+    // The far side of the road: a plain frontage with a few windows.
+    var far = [];
+    for (var fx = -L / 2 + 1.3 + R.range(0, 0.6); fx < L / 2 - 1; fx += R.range(2.1, 2.9)) far.push(box([fx, R.chance(0.3) ? 1.25 : 1.75, 0.02], [1.2, R.chance(0.5) ? 1.5 : 1.1, 0.04], 'glass'), box([fx, 3.6, 0.02], [1.2, 0.9, 0.04], 'glass'));
+    objects.push({ origin: [0, 0, kerbZ - 6.4], shapes: far, label: 'far frontage', backdrop: true });
     // Kerb and the road below it.
     objects.push({ origin: [0, 0, kerbZ], shapes: [box([0, -0.03, -0.075], [L, 0.14, 0.15], 'shade')], label: 'kerb' });
     objects.push({ origin: [0, -0.12, kerbZ - 3.2], shapes: [box([0, -0.02, 0], [L, 0.04, 6.3], 'road')], label: 'road', flat: true });
@@ -376,7 +406,7 @@
       box([2.09, 0.56, 0.6], [0.04, 0.12, 0.3], 'glass'), box([2.09, 0.56, -0.6], [0.04, 0.12, 0.3], 'glass'), box([-2.09, 0.6, 0], [0.04, 0.12, 1.5], 'dark')];
     [[-1.35, -0.86], [1.35, -0.86], [-1.35, 0.86], [1.35, 0.86]].forEach(function (w) { car.push(cyl([w[0], 0.32, w[1]], 0.32, 0.22, AZ, 'dark'), cyl([w[0], 0.32, w[1] + (w[1] > 0 ? 0.115 : -0.115)], 0.17, 0.01, AZ, 'shade')); });
     objects.push({ origin: [carX, -0.12, kerbZ - 1.15], yaw: carDir, shapes: car, label: 'parked car' });
-    return { planes: planes, objects: objects, props: [], open: true, user: { position: [R.range(-1.2, 1.2), 1.6, kerbZ + 0.9], yaw: R.range(-25, 25), pitch: 8 }, bounds: [L / 2 - 0.4, 3.6, kerbZ - 5.5, frontZ - 0.35], orbit: [0, 0.8, 0.4] };
+    return { planes: planes, objects: objects, props: [], open: true, user: (function () { var side = R.chance(0.5) ? -1 : 1; return { position: [side * R.range(4.0, 5.0), 1.6, kerbZ + 1.5], yaw: -side * R.range(74, 88), pitch: 9 }; })(), bounds: [L / 2 - 0.4, 3.6, kerbZ - 5.9, frontZ - 0.35], orbit: [0, 0.8, 0.4] };
   }
 
   var SPACES = [
@@ -433,7 +463,7 @@
     sun.position.set(-2.5, 6, 3.5);
     scene3.add(hemi, sun);
 
-    var userCam = new THREE.PerspectiveCamera(62, 1.6, 0.05, 80);
+    var userCam = new THREE.PerspectiveCamera(52, 1.6, 0.05, 80);
     var orbitCam = new THREE.PerspectiveCamera(42, 1.6, 0.05, 120);
     var captureCam = new THREE.PerspectiveCamera(60, 4 / 3, 0.05, 80);
     var CAPTURE_W = 960, CAPTURE_H = 720;
@@ -493,10 +523,12 @@
       }
     }
 
+    var backdrops = [];           // holders shown to the wearer and the capture camera, hidden from the overview
     function buildSpace() {
       clearGroup(realGroup);
       clearGroup(helperGroup);
       realMeshes = [];
+      backdrops = [];
       Object.keys(realMaterials).forEach(function (k) { realMaterials[k].dispose(); });
       realMaterials = {};
       if (edgeMaterial) edgeMaterial.dispose();
@@ -511,7 +543,10 @@
         holder.position.copy(toV3(p.position));
         holder.quaternion.copy(toQuat(p.rotation));
         var mesh;
-        if (p.kind === 'floor') {
+        if (p.kind === 'ceiling') {
+          mesh = new THREE.Mesh(new THREE.BoxGeometry(p.size[0], 0.04, p.size[2]), new THREE.MeshLambertMaterial({ color: T.wall }));
+          mesh.position.y = -0.02;
+        } else if (p.kind === 'floor') {
           mesh = new THREE.Mesh(new THREE.BoxGeometry(p.size[0], 0.04, p.size[2]), new THREE.MeshLambertMaterial({ color: T.floor }));
           mesh.position.y = -0.02;
           var pts = [], hx = p.size[0] / 2, hz = p.size[2] / 2;
@@ -530,12 +565,14 @@
         }
         mesh.userData.real = true;
         holder.add(mesh);
+        if (p.backdrop) backdrops.push(holder);
         realGroup.add(holder);
         realMeshes.push(mesh);
       });
 
       space.objects.forEach(function (o) {
         var holder = new THREE.Group();
+        if (o.backdrop) backdrops.push(holder);
         holder.position.copy(toV3(o.origin || [0, 0, 0]));
         if (o.rotation) holder.quaternion.copy(toQuat(o.rotation));
         else if (o.yaw) holder.quaternion.copy(toQuat(yawQuat(o.yaw)));
@@ -606,9 +643,21 @@
       var step = detectTimer;
       detectTimer = 0;
       var view = { position: head.position, rotation: headQuat(), tanHalfX: Math.tan(31 * DEG) * 1.45, tanHalfY: Math.tan(31 * DEG) };
+      // What the centre of the view is resting on, so a surface the wearer is standing right up against counts too.
+      var looks = [];
+      for (var a = 0; a < 3; a++) for (var c = 0; c < 3; c++) {
+        var ray = viewRay(view, 0.25 + a * 0.25, 0.25 + c * 0.25), seenAt = castReal(ray.origin, ray.direction, 6);
+        if (seenAt) looks.push(seenAt.position);
+      }
       planes.forEach(function (p) {
         if (p.found) return;
-        var visible = 0;
+        var visible = 0, def = p.def, inv = qInv(def.rotation);
+        for (var k = 0; k < looks.length && visible < 3; k++) {
+          var l = qRot(inv, [looks[k][0] - def.position[0], looks[k][1] - def.position[1], looks[k][2] - def.position[2]]);
+          var off = def.kind === 'wall' ? l[2] : (def.kind === 'table' ? l[1] - def.size[1] / 2 : l[1]);
+          var across = def.kind === 'wall' ? l[1] / Math.max(def.size[1], 1e-3) : l[2] / Math.max(def.size[2], 1e-3);
+          if (Math.abs(off) < 0.05 && Math.abs(l[0]) <= def.size[0] / 2 && Math.abs(across) <= 0.5) visible++;
+        }
         for (var i = 0; i < p.samples.length && visible < 3; i++) {
           var s = p.samples[i], d = [s[0] - head.position[0], s[1] - head.position[1], s[2] - head.position[2]];
           var dist = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
@@ -645,6 +694,7 @@
       var loop = new THREE.LineLoop(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(flat, 3)), material);
       loop.computeLineDistances();
       loop.userData.outline = true;
+      if (def.backdrop) backdrops.push(loop);
       helperGroup.add(loop);
     }
 
@@ -748,7 +798,7 @@
       else if (kind === 'tube') {
         var pts = p.points || [];
         if (pts.length < 2) return;
-        geometry = tubeGeometry(pts, p.radius || 0.01, 20);
+        geometry = tubeGeometry(pts, p.radius || 0.01, 20, p.flow ? toV3(head.position) : null);
       } else if (kind === 'mesh') {
         var colors = null;
         if (p.colors && p.colors.length) {
@@ -1203,6 +1253,7 @@
       orbitCam.position.set(orbit.target.x + orbit.distance * Math.sin(yaw) * Math.cos(pitch), orbit.target.y + orbit.distance * Math.sin(pitch), orbit.target.z + orbit.distance * Math.cos(yaw) * Math.cos(pitch));
       orbitCam.lookAt(orbit.target);
       orbitCam.updateMatrixWorld(true);
+      for (var b = 0; b < backdrops.length; b++) backdrops[b].visible = mode !== 'orbit';
       if (marker) {
         marker.visible = mode === 'orbit';
         marker.position.copy(userCam.position);
@@ -1245,7 +1296,7 @@
       renderer.setSize(w, h, false);
       userCam.aspect = orbitCam.aspect = w / h;
       // Keep a useful horizontal field of view on tall phone screens.
-      userCam.fov = w / h < 1 ? 78 : 62;
+      userCam.fov = w / h < 1 ? 74 : (w / h > 2.2 ? 40 : 52);
       userCam.updateProjectionMatrix();
       orbitCam.updateProjectionMatrix();
     }
@@ -1297,6 +1348,7 @@
       var contentWas = contentGroup.visible, helperWas = helperGroup.visible, background = scene3.background;
       contentGroup.visible = false;
       helperGroup.visible = false;
+      backdrops.forEach(function (b) { b.visible = true; });
       scene3.background = new THREE.Color(T.bgBottom);
       renderer.setRenderTarget(captureTarget);
       renderer.render(scene3, captureCam);

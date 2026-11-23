@@ -18,9 +18,9 @@ namespace Spatail.Quest.EditorTools
 {
     /// <summary>
     /// Configures the project for Meta Quest so that a fresh clone opens ready to build: the scene, player settings,
-    /// the Meta project config (passthrough, scene, hands, system keyboard) and the OpenXR plug-in with Meta's
-    /// feature set. Runs once per editor session and from <c>Spatail > Setup Project</c>. Every step is idempotent
-    /// and isolated, so one failing step is reported without stopping the others.
+    /// the Meta project config (passthrough, camera access, spatial data, hands, system keyboard) and the OpenXR
+    /// plug-in with Meta's feature set. Runs once per editor session and from <c>Spatail > Setup Project</c>. Every
+    /// step is idempotent and isolated, so one failing step is reported without stopping the others.
     /// </summary>
     [InitializeOnLoad]
     public static class SpatailQuestSetup
@@ -106,7 +106,7 @@ namespace Spatail.Quest.EditorTools
             ok &= Step("scene", EnsureScene);
             ok &= Step("player settings", ApplyPlayerSettings);
             ok &= Step("Meta project config", ApplyMetaConfig);
-            ok &= Step("XR plug-in", ApplyXr);
+            ok &= Step("XR plug-in", () => ApplyXr(BuildTargetGroup.Android));
             ok &= Step("build target", EnsureAndroidTarget);
             AssetDatabase.SaveAssets();
             Debug.Log(ok ? "[Spatail] Project setup applied." : "[Spatail] Project setup finished with problems; see the messages above.");
@@ -198,8 +198,12 @@ namespace Spatail.Quest.EditorTools
             };
             config.handTrackingSupport = OVRProjectConfig.HandTrackingSupport.ControllersAndHands;
             config.insightPassthroughSupport = OVRProjectConfig.FeatureSupport.Required;
-            // "Supported" rather than "Required": Spatail still runs on a flat floor when there is no room scan.
+            // Spatail never loads a room scan. The "scene" feature is on only because it is what puts the Spatial data
+            // permission in the manifest, and live depth ray casting needs that permission. "Supported" rather than
+            // "Required": without it Spatail still runs, on a flat floor.
             config.sceneSupport = OVRProjectConfig.FeatureSupport.Supported;
+            // Puts the headset camera permission in the manifest, for the frames the planner looks at.
+            config.isPassthroughCameraAccessEnabled = true;
             config.requiresSystemKeyboard = true;
             config.systemLoadingScreenBackground = OVRProjectConfig.SystemLoadingScreenBackground.ContextualPassthrough;
             // Meta's default network security config forbids cleartext traffic, which would block a planner service
@@ -210,10 +214,26 @@ namespace Spatail.Quest.EditorTools
 
         // ---- XR ----------------------------------------------------------------------------
 
-        static void ApplyXr()
+        /// <summary>
+        /// Play mode in the Editor uses the desktop (Standalone) XR settings, not Android's. Turning OpenXR on there
+        /// lets Play mode run on a headset over Link or on the Meta XR Simulator. It is opt-in because with no XR
+        /// runtime on the machine OpenXR only logs that it could not start, and Play mode then uses Spatail's own
+        /// desktop simulator exactly as before.
+        /// </summary>
+        [MenuItem("Spatail/Use XR Runtime In Play Mode (Link or Meta XR Simulator)", priority = 2)]
+        public static void EnableXrInPlayMode()
         {
-            const BuildTargetGroup group = BuildTargetGroup.Android;
+            bool ok = Step("XR plug-in for Play mode", () => ApplyXr(BuildTargetGroup.Standalone));
+            AssetDatabase.SaveAssets();
+            EditorUtility.DisplayDialog("Spatail",
+                ok ? "OpenXR with Meta's feature set is now enabled for Play mode.\n\n" +
+                     "Activate the Meta XR Simulator (Window > Meta > Meta XR Simulator > Activate) or connect a headset over Link, then press Play.\n\n" +
+                     "To go back, untick OpenXR under Project Settings > XR Plug-in Management > Windows, Mac, Linux."
+                   : "OpenXR could not be enabled for Play mode. See the Console for details.", "OK");
+        }
 
+        static void ApplyXr(BuildTargetGroup group)
+        {
             XRGeneralSettings general = GetOrCreateXrSettings(group);
             if (general == null || general.Manager == null)
                 throw new InvalidOperationException("XR Plug-in Management settings could not be created.");
@@ -222,7 +242,7 @@ namespace Spatail.Quest.EditorTools
             foreach (XRLoader loader in general.Manager.activeLoaders)
                 if (loader is OpenXRLoader) hasOpenXr = true;
             if (!hasOpenXr && !XRPackageMetadataStore.AssignLoader(general.Manager, typeof(OpenXRLoader).FullName, group))
-                throw new InvalidOperationException("Could not enable OpenXR for Android. Enable it in Project Settings > XR Plug-in Management.");
+                throw new InvalidOperationException("Could not enable OpenXR for " + group + ". Enable it in Project Settings > XR Plug-in Management.");
             general.InitManagerOnStart = true;
             EditorUtility.SetDirty(general);
 
@@ -237,7 +257,7 @@ namespace Spatail.Quest.EditorTools
             }
             if (metaSet == null)
             {
-                Debug.LogWarning("[Spatail] The Meta XR feature set was not found. Enable it under Project Settings > XR Plug-in Management > OpenXR > Android.");
+                Debug.LogWarning("[Spatail] The Meta XR feature set was not found. Enable it under Project Settings > XR Plug-in Management > OpenXR for " + group + ".");
             }
             else if (!metaSet.isEnabled)
             {
@@ -246,7 +266,8 @@ namespace Spatail.Quest.EditorTools
             }
 
             EnableFeature(group, MetaXrFeatureId, true);
-            EnableFeature(group, MetaQuestFeatureId, true);
+            // Meta Quest Support is an Android-only feature.
+            if (group == BuildTargetGroup.Android) EnableFeature(group, MetaQuestFeatureId, true);
             EnableFeature(group, TouchProfileFeatureId, true);
             FeatureHelpers.RefreshFeatures(group);
         }

@@ -27,8 +27,10 @@
     '.sl-seed{width:86px;border:1px solid var(--sl-line);background:var(--sl-surface);color:var(--sl-ink);font:500 13px/1 var(--sl-mono);padding:8px 10px;border-radius:999px}',
     '.sl-main{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px;align-items:stretch}',
     '.sl.compact .sl-main{grid-template-columns:minmax(0,1fr)}',
+    '.sl.compact .sl-view{aspect-ratio:auto;height:clamp(300px,62vh,720px)}',
     '@media (max-width:900px){.sl-main{grid-template-columns:minmax(0,1fr)}}',
     '.sl-stage{position:relative;background:var(--sl-surface);border:1px solid var(--sl-line);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;min-width:0}',
+    '.sl-viewwrap{position:relative}',
     '.sl-view{position:relative;width:100%;aspect-ratio:16/10;min-height:300px}',
     '.sl-hint{position:absolute;left:10px;top:10px;font-size:11.5px;color:var(--sl-muted);background:color-mix(in srgb,var(--sl-surface) 82%,transparent);padding:4px 9px;border-radius:999px;pointer-events:none;max-width:calc(100% - 20px)}',
     '.sl-found{position:absolute;right:10px;top:10px;font-size:11.5px;font-weight:600;color:var(--sl-accent-ink);background:color-mix(in srgb,var(--sl-surface) 86%,transparent);border:1px solid var(--sl-line);padding:4px 9px;border-radius:999px;pointer-events:none}',
@@ -102,12 +104,14 @@
       '<p class="sl-note" data-role="about"></p>',
       '<div class="sl-main">',
       '  <div class="sl-stage">',
+      '    <div class="sl-viewwrap">',
       '    <div class="sl-view" data-role="view"></div>',
       '    <span class="sl-hint">Drag to look. W A S D or the arrows to walk.</span>',
       '    <span class="sl-found" data-role="found">No surfaces found yet</span>',
       '    <div class="sl-pad" aria-label="Walk">',
       '      <button type="button" data-move="tl" aria-label="Turn left">&#8630;</button><button type="button" data-move="f" aria-label="Forward">&#8593;</button><button type="button" data-move="tr" aria-label="Turn right">&#8631;</button>',
       '      <button type="button" data-move="l" aria-label="Step left">&#8592;</button><button type="button" data-move="b" aria-label="Back">&#8595;</button><button type="button" data-move="r" aria-label="Step right">&#8594;</button>',
+      '    </div>',
       '    </div>',
       '    <div class="sl-console">',
       '      <form class="sl-prompt" data-role="form" autocomplete="off">',
@@ -236,6 +240,7 @@
 
     function start(spec, viewFrame) {
       lastError = null;
+      $('log').hidden = true;
       var result = lab.run({ id: spec.id, title: spec.title, prompt: spec.prompt, code: spec.code, view: viewFrame });
       return result.settled.then(function (settled) {
         if (settled.error) showError('The program stopped with an error', settled.error);
@@ -389,6 +394,7 @@
 
     function afterSpaceChange() {
       selected = null; lastEpisode = null; lastError = null;
+      $('log').hidden = true;
       codeBox.value = ''; delete codeBox.dataset.id; delete codeBox.dataset.title; delete codeBox.dataset.prompt;
       $('code-title').textContent = 'Program';
       say('<span class="sl-note">' + (lab.space().props > 0 ? 'The stand-in pump is here. Pick a request or type your own.' : 'An unprepared space. Look around, then try one of the examples, or switch to the planner.') + '</span>', '');
