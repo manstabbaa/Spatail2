@@ -1,0 +1,270 @@
+{
+  "id": "pump-station-p101",
+  "name": "Pump P-101",
+  "equipment": {
+    "id": "pump-p101",
+    "label": "Pump P-101",
+    "aliases": ["pump station", "pump skid", "the pump", "machine", "equipment", "p-101", "p101"],
+    "about": "Process water transfer pump, building 2. Duty pump; P-102 is standby.",
+    "center": [0.17, 0.56, 0],
+    "size": [2.14, 1.12, 0.62],
+    "parts": [
+      {
+        "id": "baseplate",
+        "label": "Baseplate",
+        "aliases": ["skid", "base", "plinth"],
+        "about": "Fabricated steel baseplate, grouted to the plinth. Check hold-down bolts at 85 Nm.",
+        "center": [-0.12, 0.1, 0],
+        "size": [1.62, 0.2, 0.62],
+        "shapes": [
+          {"t": "box", "p": [-0.12, 0.04, 0], "s": [1.62, 0.08, 0.62], "tone": "shade"},
+          {"t": "box", "p": [-0.12, 0.12, 0], "s": [1.5, 0.08, 0.5]},
+          {"t": "box", "p": [-0.6, 0.22, 0], "s": [0.09, 0.12, 0.34]},
+          {"t": "box", "p": [-0.34, 0.22, 0], "s": [0.09, 0.12, 0.34]},
+          {"t": "box", "p": [-0.02, 0.26, 0], "s": [0.12, 0.2, 0.2]},
+          {"t": "box", "p": [0.2, 0.2, 0], "s": [0.2, 0.08, 0.34]},
+          {"t": "cyl", "p": [-0.82, 0.17, -0.21], "s": [0.018, 0.02, 0], "tone": "dark"},
+          {"t": "cyl", "p": [-0.82, 0.17, 0.21], "s": [0.018, 0.02, 0], "tone": "dark"},
+          {"t": "cyl", "p": [0.58, 0.17, -0.21], "s": [0.018, 0.02, 0], "tone": "dark"},
+          {"t": "cyl", "p": [0.58, 0.17, 0.21], "s": [0.018, 0.02, 0], "tone": "dark"}
+        ]
+      },
+      {
+        "id": "motor",
+        "label": "Motor",
+        "aliases": ["electric motor", "drive", "drive motor"],
+        "scanLabel": true,
+        "about": "7.5 kW induction motor, 1450 rpm. Drives the pump through a flexible coupling.",
+        "center": [-0.5, 0.49, 0],
+        "size": [0.68, 0.5, 0.38],
+        "shapes": [
+          {"t": "cyl", "p": [-0.47, 0.46, 0], "s": [0.165, 0.46, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [-0.62, 0.46, 0], "s": [0.173, 0.014, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [-0.55, 0.46, 0], "s": [0.173, 0.014, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [-0.48, 0.46, 0], "s": [0.173, 0.014, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [-0.41, 0.46, 0], "s": [0.173, 0.014, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [-0.34, 0.46, 0], "s": [0.173, 0.014, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [-0.755, 0.46, 0], "s": [0.173, 0.11, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [-0.815, 0.46, 0], "s": [0.12, 0.012, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [-0.225, 0.46, 0], "s": [0.15, 0.03, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [-0.17, 0.46, 0], "s": [0.028, 0.1, 0], "r": [0, 0, 90], "tone": "dark"},
+          {"t": "box", "p": [-0.47, 0.66, 0], "s": [0.17, 0.09, 0.15]},
+          {"t": "box", "p": [-0.47, 0.712, 0], "s": [0.19, 0.015, 0.17], "tone": "shade"}
+        ]
+      },
+      {
+        "id": "coupling",
+        "label": "Coupling",
+        "aliases": ["shaft coupling", "coupling guard", "bearing housing", "bearing", "shaft"],
+        "about": "Flexible jaw coupling and bearing housing between the motor and the pump shaft. Alignment tolerance 0.05 mm.",
+        "center": [-0.02, 0.47, 0],
+        "size": [0.26, 0.26, 0.24],
+        "shapes": [
+          {"t": "cyl", "p": [-0.12, 0.46, 0], "s": [0.07, 0.05, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [-0.092, 0.46, 0], "s": [0.058, 0.008, 0], "r": [0, 0, 90], "tone": "dark"},
+          {"t": "cyl", "p": [-0.065, 0.46, 0], "s": [0.07, 0.05, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [0.02, 0.46, 0], "s": [0.09, 0.12, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [0.088, 0.46, 0], "s": [0.11, 0.02, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [0.02, 0.575, 0], "s": [0.018, 0.05, 0]}
+        ]
+      },
+      {
+        "id": "pump",
+        "label": "Pump",
+        "aliases": ["casing", "volute", "pump casing", "impeller", "pump head"],
+        "scanLabel": true,
+        "about": "End-suction centrifugal pump. Rated 42 m3/h at 32 m head.",
+        "center": [0.22, 0.5, 0],
+        "size": [0.3, 0.62, 0.5],
+        "shapes": [
+          {"t": "cyl", "p": [0.2, 0.46, 0], "s": [0.245, 0.15, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [0.115, 0.46, 0], "s": [0.2, 0.03, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [0.295, 0.46, 0], "s": [0.19, 0.04, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [0.345, 0.46, 0], "s": [0.085, 0.06, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [0.2, 0.74, 0], "s": [0.075, 0.14, 0]}
+        ]
+      },
+      {
+        "id": "outlet",
+        "label": "Outlet",
+        "aliases": ["discharge", "riser", "outlet pipe", "discharge pipe", "pressure gauge", "gauge"],
+        "about": "Discharge to the process header. Normal pressure 3.2 bar.",
+        "center": [0.22, 0.97, 0],
+        "size": [0.3, 0.32, 0.24],
+        "shapes": [
+          {"t": "cyl", "p": [0.2, 0.825, 0], "s": [0.115, 0.03, 0], "tone": "shade"},
+          {"t": "cyl", "p": [0.2, 0.96, 0], "s": [0.07, 0.24, 0]},
+          {"t": "cyl", "p": [0.2, 1.095, 0], "s": [0.115, 0.03, 0]},
+          {"t": "cyl", "p": [0.2, 1.112, 0], "s": [0.07, 0.006, 0], "tone": "dark"},
+          {"t": "cyl", "p": [0.29, 0.97, 0], "s": [0.012, 0.06, 0], "r": [0, 0, 90], "tone": "dark"},
+          {"t": "cyl", "p": [0.33, 0.97, 0], "s": [0.045, 0.03, 0], "r": [90, 0, 0]},
+          {"t": "cyl", "p": [0.33, 0.97, -0.017], "s": [0.036, 0.004, 0], "r": [90, 0, 0], "tone": "shade"}
+        ]
+      },
+      {
+        "id": "gate-valve",
+        "label": "Gate valve",
+        "aliases": ["valve", "inlet valve", "isolation valve", "handwheel", "hand wheel"],
+        "scanLabel": true,
+        "about": "Inlet isolation gate valve. Closes clockwise; 14 turns from fully open.",
+        "center": [0.64, 0.64, 0],
+        "size": [0.24, 0.52, 0.24],
+        "actionAxis": [0, 1, 0],
+        "shapes": [
+          {"t": "cyl", "p": [0.55, 0.46, 0], "s": [0.105, 0.025, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [0.73, 0.46, 0], "s": [0.105, 0.025, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [0.64, 0.46, 0], "s": [0.085, 0.155, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [0.64, 0.6, 0], "s": [0.06, 0.14, 0]},
+          {"t": "cyl", "p": [0.64, 0.56, 0], "s": [0.085, 0.02, 0], "tone": "shade"},
+          {"t": "box", "p": [0.64, 0.73, 0], "s": [0.07, 0.12, 0.03]},
+          {"t": "cyl", "p": [0.64, 0.8, 0], "s": [0.011, 0.14, 0], "tone": "dark"},
+          {"t": "torus", "p": [0.64, 0.85, 0], "s": [0.1, 0.012, 0]},
+          {"t": "box", "p": [0.64, 0.85, 0], "s": [0.19, 0.012, 0.018]},
+          {"t": "box", "p": [0.64, 0.85, 0], "s": [0.19, 0.012, 0.018], "r": [0, 90, 0]},
+          {"t": "cyl", "p": [0.64, 0.85, 0], "s": [0.024, 0.03, 0], "tone": "dark"}
+        ]
+      },
+      {
+        "id": "inlet",
+        "label": "Inlet pipe",
+        "aliases": ["inlet", "suction", "suction pipe", "pipe", "pipework"],
+        "about": "DN100 suction line from the supply tank.",
+        "center": [0.98, 0.46, 0],
+        "size": [0.5, 0.24, 0.24],
+        "shapes": [
+          {"t": "cyl", "p": [0.455, 0.46, 0], "s": [0.062, 0.17, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [0.385, 0.46, 0], "s": [0.105, 0.025, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [0.98, 0.46, 0], "s": [0.062, 0.48, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [0.9, 0.46, 0], "s": [0.075, 0.04, 0], "r": [0, 0, 90], "tone": "shade"},
+          {"t": "cyl", "p": [1.215, 0.46, 0], "s": [0.11, 0.03, 0], "r": [0, 0, 90]},
+          {"t": "cyl", "p": [1.232, 0.46, 0], "s": [0.062, 0.006, 0], "r": [0, 0, 90], "tone": "dark"},
+          {"t": "box", "p": [1.05, 0.195, 0], "s": [0.04, 0.39, 0.04]},
+          {"t": "box", "p": [1.05, 0.39, 0], "s": [0.1, 0.02, 0.14]},
+          {"t": "box", "p": [1.05, 0.008, 0], "s": [0.16, 0.016, 0.16], "tone": "shade"}
+        ]
+      }
+    ]
+  },
+  "fixtures": [
+    {
+      "id": "control-box",
+      "label": "Control box",
+      "aliases": ["control panel", "panel", "starter", "electrical box", "isolator", "stop button"],
+      "scanLabel": true,
+      "about": "Motor starter and isolator for P-101. STOP is the red button; the isolator locks in OFF.",
+      "mount": "wall",
+      "offset": [-0.95, 1.2, 0.92],
+      "center": [0, 0, 0.07],
+      "size": [0.34, 0.46, 0.14],
+      "shapes": [
+        {"t": "box", "p": [0, 0, 0.06], "s": [0.32, 0.44, 0.12]},
+        {"t": "box", "p": [0, -0.01, 0.125], "s": [0.27, 0.36, 0.01], "tone": "shade"},
+        {"t": "cyl", "p": [-0.08, 0.16, 0.135], "s": [0.014, 0.012, 0], "r": [90, 0, 0], "tone": "dark"},
+        {"t": "cyl", "p": [-0.03, 0.16, 0.135], "s": [0.014, 0.012, 0], "r": [90, 0, 0], "tone": "dark"},
+        {"t": "cyl", "p": [0.02, 0.16, 0.135], "s": [0.014, 0.012, 0], "r": [90, 0, 0], "tone": "dark"},
+        {"t": "box", "p": [0.1, -0.02, 0.14], "s": [0.02, 0.09, 0.02], "tone": "dark"},
+        {"t": "cyl", "p": [-0.06, 0.92, 0.03], "s": [0.016, 1.4, 0], "tone": "shade"},
+        {"t": "box", "p": [0.3, -0.3, 0.045], "s": [0.11, 0.12, 0.09]},
+        {"t": "cyl", "p": [0.3, -0.3, 0.1], "s": [0.03, 0.02, 0], "r": [90, 0, 0], "tone": "dark"},
+        {"t": "cyl", "p": [0.2, -0.3, 0.03], "s": [0.012, 0.1, 0], "r": [0, 0, 90], "tone": "shade"}
+      ]
+    },
+    {
+      "id": "workbench",
+      "label": "Workbench",
+      "aliases": ["bench", "work bench", "table", "desk"],
+      "scanLabel": true,
+      "about": "Service bench. Seal kits and gaskets live in the top drawer.",
+      "mount": "table",
+      "offset": [-1.95, 0, 0.2],
+      "yaw": 0,
+      "center": [0, 0.47, 0],
+      "size": [1.2, 0.94, 0.62],
+      "shapes": [
+        {"t": "box", "p": [0, 0.84, 0], "s": [1.2, 0.04, 0.62]},
+        {"t": "box", "p": [0, 0.89, 0.3], "s": [1.2, 0.06, 0.02], "tone": "shade"},
+        {"t": "box", "p": [-0.56, 0.41, -0.27], "s": [0.045, 0.82, 0.045]},
+        {"t": "box", "p": [-0.56, 0.41, 0.27], "s": [0.045, 0.82, 0.045]},
+        {"t": "box", "p": [0.56, 0.41, -0.27], "s": [0.045, 0.82, 0.045]},
+        {"t": "box", "p": [0.56, 0.41, 0.27], "s": [0.045, 0.82, 0.045]},
+        {"t": "box", "p": [0, 0.24, 0], "s": [1.1, 0.02, 0.52], "tone": "shade"},
+        {"t": "box", "p": [0.36, 0.71, -0.02], "s": [0.34, 0.22, 0.5]},
+        {"t": "box", "p": [0.36, 0.765, -0.275], "s": [0.3, 0.08, 0.012], "tone": "shade"},
+        {"t": "box", "p": [0.36, 0.665, -0.275], "s": [0.3, 0.08, 0.012], "tone": "shade"},
+        {"t": "box", "p": [0.36, 0.765, -0.285], "s": [0.1, 0.012, 0.012], "tone": "dark"},
+        {"t": "box", "p": [0.36, 0.665, -0.285], "s": [0.1, 0.012, 0.012], "tone": "dark"},
+        {"t": "box", "p": [0.02, 0.93, 0.06], "s": [0.44, 0.14, 0.2]},
+        {"t": "box", "p": [0.02, 1.012, 0.06], "s": [0.46, 0.03, 0.22], "tone": "shade"},
+        {"t": "box", "p": [0.02, 1.04, 0.06], "s": [0.16, 0.02, 0.03], "tone": "dark"},
+        {"t": "box", "p": [-0.36, 0.875, -0.1], "s": [0.2, 0.03, 0.14], "tone": "shade"},
+        {"t": "cyl", "p": [0.33, 0.92, 0.12], "s": [0.03, 0.12, 0]},
+        {"t": "cyl", "p": [0.33, 0.99, 0.12], "s": [0.014, 0.02, 0], "tone": "dark"}
+      ]
+    }
+  ],
+  "knowledge": {
+    "procedures": [
+      {
+        "id": "isolate-for-service",
+        "title": "Isolate the pump for service",
+        "aliases": ["walkthrough", "service", "isolate", "isolation", "lock out", "lockout", "shut down", "shutdown", "seal change"],
+        "steps": [
+          {"entity": "control-box", "title": "Stop and lock out", "body": "Press STOP, then lock the isolator in the OFF position.", "action": "press"},
+          {"entity": "gate-valve", "title": "Close this valve", "body": "Turn the handwheel clockwise until it stops.", "action": "turn-cw"},
+          {"entity": "coupling", "title": "Check the shaft is still", "body": "Confirm the coupling has stopped before removing the guard.", "action": "inspect"}
+        ]
+      },
+      {
+        "id": "start-up-check",
+        "title": "Start-up check",
+        "aliases": ["start up", "startup", "start", "restart", "commission"],
+        "steps": [
+          {"entity": "gate-valve", "title": "Open the inlet valve", "body": "Turn the handwheel anticlockwise until fully open.", "action": "turn-ccw"},
+          {"entity": "pump", "title": "Prime the casing", "body": "Vent the casing until water runs clear.", "action": "inspect"},
+          {"entity": "control-box", "title": "Start the motor", "body": "Remove your lock, switch the isolator ON and press START.", "action": "press"},
+          {"entity": "outlet", "title": "Check discharge pressure", "body": "The gauge should settle near 3.2 bar within ten seconds.", "action": "inspect"}
+        ]
+      }
+    ],
+    "flows": [
+      {
+        "id": "process-water",
+        "title": "Process water",
+        "medium": "water",
+        "rate": "42 m3/h",
+        "aliases": ["water", "flow", "process water"],
+        "path": [[1.3, 0.46, 0], [0.2, 0.46, 0], [0.2, 1.26, 0]],
+        "radius": 0.075,
+        "highlight": ["inlet", "outlet"],
+        "inlet": "inlet",
+        "outlet": "outlet"
+      }
+    ],
+    "faults": {
+      "title": "Last week's faults",
+      "records": [
+        {"entity": "motor", "title": "Bearing over-temperature", "when": "6 days ago", "severity": "high", "detail": "82 C at the drive-end bearing; tripped on thermal overload."},
+        {"entity": "coupling", "title": "Vibration alarm", "when": "4 days ago", "severity": "medium", "detail": "7.1 mm/s RMS; misalignment suspected."}
+      ]
+    },
+    "metrics": [
+      {"id": "output", "title": "Output this month", "unit": "x100 m3", "aliases": ["output", "production", "throughput", "volume"], "values": [38, 44, 41, 52, 49, 61, 58, 66, 78, 86]},
+      {"id": "energy", "title": "Energy this month", "unit": "kWh", "aliases": ["energy", "power", "consumption", "electricity"], "values": [120, 118, 124, 131, 127, 140, 138, 142, 151, 149]}
+    ],
+    "spares": {
+      "title": "Parts check",
+      "people": ["M", "J"],
+      "more": 3,
+      "items": [
+        {"text": "Shaft seal", "done": true},
+        {"text": "Gasket set", "done": true},
+        {"text": "Coupling insert", "done": false}
+      ]
+    },
+    "people": [
+      {"name": "Sara", "initial": "S", "role": "Reliability engineer"},
+      {"name": "Marco", "initial": "M", "role": "Maintenance lead"},
+      {"name": "Jun", "initial": "J", "role": "Technician"}
+    ]
+  }
+}
