@@ -138,9 +138,10 @@
       var g = new THREE.CylinderGeometry(radius, radius, len, sides, 1, true).toNonIndexed();
       var mid = a.clone().add(b).multiplyScalar(0.5), turn = new THREE.Quaternion().setFromUnitVectors(up, axis.normalize());
       if (toward) {
-        // u = 0 leaves the cylinder along its local +Z; twist about the axis until that points at the viewer.
+        // The chevron tips sit a quarter of the way round (u = 0.25), which leaves the cylinder along its local +X;
+        // twist about the axis until that points at the viewer.
         var want = toward.clone().sub(mid); want.addScaledVector(axis, -want.dot(axis));
-        var have = new THREE.Vector3(0, 0, 1).applyQuaternion(turn);
+        var have = new THREE.Vector3(1, 0, 0).applyQuaternion(turn);
         if (want.lengthSq() > 1e-8) {
           want.normalize();
           var angle = Math.atan2(new THREE.Vector3().crossVectors(have, want).dot(axis), have.dot(want));
@@ -1296,7 +1297,7 @@
       renderer.setSize(w, h, false);
       userCam.aspect = orbitCam.aspect = w / h;
       // Keep a useful horizontal field of view on tall phone screens.
-      userCam.fov = w / h < 1 ? 74 : (w / h > 2.2 ? 40 : 52);
+      userCam.fov = w / h < 1 ? 74 : (w / h > 2.2 ? 46 : 52);
       userCam.updateProjectionMatrix();
       orbitCam.updateProjectionMatrix();
     }

@@ -32,7 +32,7 @@
     '.sl-stage{position:relative;background:var(--sl-surface);border:1px solid var(--sl-line);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;min-width:0}',
     '.sl-viewwrap{position:relative}',
     '.sl-view{position:relative;width:100%;aspect-ratio:16/10;min-height:300px}',
-    '.sl-hint{position:absolute;left:10px;top:10px;font-size:11.5px;color:var(--sl-muted);background:color-mix(in srgb,var(--sl-surface) 82%,transparent);padding:4px 9px;border-radius:999px;pointer-events:none;max-width:calc(100% - 20px)}',
+    '.sl-hint{position:absolute;left:10px;bottom:10px;font-size:11.5px;color:var(--sl-muted);background:color-mix(in srgb,var(--sl-surface) 82%,transparent);padding:4px 9px;border-radius:999px;pointer-events:none;max-width:calc(100% - 160px)}',
     '.sl-found{position:absolute;right:10px;top:10px;font-size:11.5px;font-weight:600;color:var(--sl-accent-ink);background:color-mix(in srgb,var(--sl-surface) 86%,transparent);border:1px solid var(--sl-line);padding:4px 9px;border-radius:999px;pointer-events:none}',
     '.sl-pad{position:absolute;right:10px;bottom:10px;display:grid;grid-template-columns:repeat(3,38px);grid-template-rows:repeat(2,38px);gap:4px}',
     '.sl-pad button{border:1px solid var(--sl-line);background:color-mix(in srgb,var(--sl-surface) 86%,transparent);color:var(--sl-accent-ink);border-radius:10px;font:600 15px/1 inherit;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none}',
@@ -178,8 +178,8 @@
       seedBox.value = def.seeded ? now.seed : '';
       seedBox.disabled = !def.seeded;
       $('shuffle').disabled = !def.seeded;
-      foundCount = 0;
-      $('found').textContent = 'No surfaces found yet';
+      foundCount = lab.surfaces().length;
+      $('found').textContent = foundCount ? foundCount + ' surface' + (foundCount === 1 ? '' : 's') + ' found' : 'No surfaces found yet';
     }
 
     function renderChips() {
@@ -448,6 +448,10 @@
     return {
       lab: lab,
       submit: submit,
+      // Run a given program in the current space, as if a builder had just returned it.
+      run: function (spec) { return start(spec, lab.capture().view); },
+      // Change space the way the picker does. Without a seed, a new layout is generated.
+      setSpace: function (name, seed) { lab.setSpace(name, seed); afterSpaceChange(); },
       setBuilder: function (name) { builder = name === 'planner' ? 'planner' : 'recorded'; lab.setFinder(builder === 'planner' ? plannerFinder : null); renderBuilder(); },
       refresh: function () { renderSpaces(); renderBuilder(); renderList(); renderChips(); },
       dispose: function () {
