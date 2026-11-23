@@ -5,19 +5,6 @@ using UnityEngine;
 
 namespace Spatail
 {
-    /// <summary>What a device knows about the physical room. Implemented once per platform.</summary>
-    public interface IRoomProvider
-    {
-        /// <summary>True once there is at least a floor to stand content on.</summary>
-        bool IsReady { get; }
-        /// <summary>One line for the user or the dev tool: "Looking for the floor", "Room loaded: 4 walls, 2 tables".</summary>
-        string Status { get; }
-        /// <summary>A fresh snapshot of surfaces and furniture. The app adds the registered equipment on top.</summary>
-        RoomModel Capture();
-        /// <summary>Raised when the room changed enough that content should be laid out again.</summary>
-        event Action Changed;
-    }
-
     /// <summary>Typed input: a system keyboard, a physical keyboard, or anything else that produces text.</summary>
     public interface ITextEntry
     {
@@ -41,7 +28,8 @@ namespace Spatail
     {
         /// <summary>The camera that follows the user's head (or the phone).</summary>
         public Camera Head;
-        public IRoomProvider Room;
+        /// <summary>Live sensing of the place: ray casts, the camera frame, surfaces noticed so far.</summary>
+        public ISpaceSensor Sensor;
         public List<PointerSource> Pointers = new List<PointerSource>();
         public ITextEntry TextEntry;
         public ISpeechInput Speech;

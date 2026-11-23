@@ -7,14 +7,15 @@ namespace Spatail
     /// <summary>
     /// The floating prompt bar from the "Built by you" sequence: a microphone, what you said, and a chip naming what
     /// was built. It hovers below the user's line of sight and drifts back into reach when they turn away.
-    /// Above it sit suggested requests; below it, the reply and a few tools.
+    /// Above it sit a few example requests; below it, the reply and a few tools.
     /// </summary>
     public sealed class PromptBar : MonoBehaviour
     {
         const float Width = 0.64f, Height = 0.068f, Distance = 0.72f, Drop = 0.36f;
         const string Placeholder = "Just say what you need";
 
-        static readonly string[] Suggestions =
+        /// <summary>Requests the recorded demo can answer next to the stand-in pump.</summary>
+        static readonly string[] StandInSuggestions =
         {
             "Build me a walkthrough for this pump",
             "Show me how the water flows",
@@ -24,6 +25,14 @@ namespace Spatail
             "Bring Sara in",
         };
 
+        /// <summary>The kind of thing to ask anywhere, once the planner is connected.</summary>
+        static readonly string[] OpenSuggestions =
+        {
+            "What am I looking at?",
+            "How far is that from here?",
+            "Mark a two metre zone around this",
+        };
+
         SpatailApp _app;
         SpatialText _text, _reply;
         Panel _mic;
@@ -31,7 +40,7 @@ namespace Spatail
         SpatialText _chipText;
         Panel _chipBackground;
         Transform _suggestionRow, _toolRow;
-        PillButton _moveButton, _twinButton, _shareButton;
+        PillButton _moveButton, _twinButton, _standInButton, _shareButton, _clearButton;
         readonly HashSet<string> _used = new HashSet<string>();
 
         string _typed = "";
@@ -48,7 +57,7 @@ namespace Spatail
             RebuildSuggestions();
             BuildTools();
             app.StateChanged += OnState;
-            app.Planned += OnPlanned;
+            app.Built += OnBuilt;
             app.Logged += OnLogged;
             Refresh();
         }
@@ -105,12 +114,12 @@ namespace Spatail
         {
             for (int i = _suggestionRow.childCount - 1; i >= 0; i--) Destroy(_suggestionRow.GetChild(i).gameObject);
 
+            // With the stand-in in the room, offer what the recorded demo can do. Without it there is nothing
+            // prepared to offer: suggest the open-ended kind of request the planner handles.
             var picks = new List<string>();
-            Build stepped = _app.Store.LatestStepped;
-            if (stepped != null && stepped.currentStep < stepped.stepCount) picks.Add("Next");
-            foreach (string s in Suggestions)
+            string[] source = _app.Settings.StandIn ? StandInSuggestions : (_app.Director.RemoteActive ? OpenSuggestions : new string[0]);
+            foreach (string s in source)
                 if (!_used.Contains(s) && picks.Count < 3) picks.Add(s);
-            if (picks.Count < 3 && _app.Store.Builds.Count > 0) picks.Add("Clear everything");
 
             var buttons = new List<PillButton>();
             float total = 0f;
@@ -133,8 +142,10 @@ namespace Spatail
 
         void BuildTools()
         {
+            _standInButton = Tool(_app.Settings.StandIn ? "Stand-in: on" : "Stand-in: off", ToggleStandIn);
             _moveButton = Tool("Move pump", () => _app.SetMovingStation(!_app.IsMovingStation));
-            _twinButton = Tool("Twin: " + _app.Twin.Mode, CycleTwin);
+            _twinButton = Tool("Show: " + _app.Twin.Mode, CycleTwin);
+            _clearButton = Tool("Clear", () => { _app.ClearExperiences(); _reply.Text = "Cleared."; HideChip(); });
             _shareButton = Tool("Share", ToggleShare);
             LayoutTools();
         }
@@ -144,7 +155,7 @@ namespace Spatail
 
         void LayoutTools()
         {
-            PillButton[] buttons = { _moveButton, _twinButton, _shareButton };
+            PillButton[] buttons = { _standInButton, _moveButton, _twinButton, _clearButton, _shareButton };
             const float gap = 0.01f;
             float total = -gap;
             foreach (PillButton b in buttons) total += b.Size.x + gap;
@@ -156,11 +167,19 @@ namespace Spatail
             }
         }
 
+        void ToggleStandIn()
+        {
+            _app.SetStandIn(!_app.Settings.StandIn);
+            _standInButton.SetText(_app.Settings.StandIn ? "Stand-in: on" : "Stand-in: off", 0.013f);
+            LayoutTools();
+            RebuildSuggestions();
+        }
+
         void CycleTwin()
         {
             TwinMode next = (TwinMode)(((int)_app.Twin.Mode + 1) % 4);
             _app.SetTwinMode(next);
-            _twinButton.SetText("Twin: " + next, 0.013f);
+            _twinButton.SetText("Show: " + next, 0.013f);
             LayoutTools();
         }
 
@@ -238,15 +257,16 @@ namespace Spatail
 
         void OnState(AppState state)
         {
-            if (state == AppState.Thinking) HideChip();
+            if (state == AppState.Building) HideChip();
             Refresh();
         }
 
-        void OnPlanned(string prompt, PlanResult plan)
+        void OnBuilt(string prompt, BuildResult result)
         {
             _typed = "";
-            _reply.Text = plan.reply ?? "";
-            if (!string.IsNullOrEmpty(plan.chip)) ShowChip("Built " + plan.chip);
+            // A command handled by a running program ("next") has nothing to say here.
+            if (result.builder != "experience") _reply.Text = result.reply ?? "";
+            if (!string.IsNullOrEmpty(result.title)) ShowChip("Built " + result.title);
             RebuildSuggestions();
             Refresh();
         }
@@ -254,7 +274,7 @@ namespace Spatail
         void OnLogged(string line)
         {
             // Session and placement hints reach the user through the reply line.
-            if (line.StartsWith("Session:") || line.StartsWith("Point at the floor") || line == "Pump placed.")
+            if (line.StartsWith("Session:") || line.StartsWith("Point at the floor") || line == "Pump placed." || line.StartsWith("Stand-in"))
             {
                 _reply.Text = line;
                 _shareButton.SetText(_app.Session.IsActive ? "Stop sharing" : "Share", 0.013f);
@@ -281,9 +301,8 @@ namespace Spatail
             Color color = Theme.Ink;
             switch (_app.State)
             {
-                case AppState.Starting: shown = "Looking around..."; color = Theme.Muted; break;
-                case AppState.Scanning: shown = "Reading the room..."; color = Theme.Muted; break;
-                case AppState.Thinking: shown = _app.LastPrompt ?? ""; break;
+                case AppState.Starting: shown = "Starting up..."; color = Theme.Muted; break;
+                case AppState.Building: shown = _app.LastPrompt ?? ""; break;
                 default:
                     if (_typed.Length > 0) shown = _typed;
                     else if (_listening) { shown = "Listening..."; color = Theme.Accent; }
@@ -309,7 +328,7 @@ namespace Spatail
                 _text.Text = Truncate(_typed, 43) + (caret ? "|" : "");
                 _text.Color = Theme.Ink;
             }
-            bool busy = _listening || _app.State == AppState.Thinking;
+            bool busy = _listening || _app.State == AppState.Building;
             float pulse = busy ? 1f + 0.12f * Mathf.Sin(Time.unscaledTime * 7f) : 1f;
             _mic.transform.parent.localScale = Vector3.one * pulse;
             _mic.SetColors(_listening ? Theme.Warning : Theme.Accent, Theme.Accent);

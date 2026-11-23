@@ -71,6 +71,7 @@ namespace Spatail.Core.Tests
             Run("Raycaster: planes, boxes, misses", Raycasts);
             Run("ViewFrame: pixel to ray and back", ViewFrames);
             Run("Font metrics: measuring and wrapping", Fonts);
+            Run("Surface tracker: starts empty and finds the floor, walls and a table by looking", SurfaceTracking);
 
             Run("Runtime: a program builds nodes, parents them and measures text", RuntimeBasics);
             Run("Runtime: animation, timers and frame callbacks", RuntimeAnimation);
@@ -406,6 +407,76 @@ namespace Spatail.Core.Tests
             Check(f.Wrap("Turn the handwheel clockwise until it stops.", 0.3f / 0.022f).Count == 2, "two lines");
             Check(fonts.Get("semibold").Width("Motor") > f.Width("Motor"), "semibold is wider");
             Check(fonts.Get("no-such-weight") == f, "unknown weight falls back");
+        }
+
+        /// <summary>Feeds the tracker what a device would get from a grid of depth rays through one view.</summary>
+        static int Look(SurfaceTracker tracker, RoomModel room, Vec3 from, Vec3 toward, int columns = 10, int rows = 8)
+        {
+            ViewFrame view = ViewFrame.FromFov(from, Quat.LookRotation(toward), 70f, 4f / 3f);
+            int hits = 0;
+            for (int r = 0; r < rows; r++)
+                for (int c = 0; c < columns; c++)
+                {
+                    Vec3 origin, direction;
+                    view.Ray((c + 0.5f) / columns, (r + 0.5f) / rows, out origin, out direction);
+                    RayHit hit;
+                    if (!GeometryRaycaster.Raycast(room.entities, origin, direction, 8f, out hit)) continue;
+                    tracker.AddSample(hit.position, hit.normal);
+                    hits++;
+                }
+            return hits;
+        }
+
+        static void SurfaceTracking()
+        {
+            RoomModel room = SimRoom.Create(withRealTable: true);
+            var tracker = new SurfaceTracker();
+            int changes = 0;
+            tracker.Changed += () => changes++;
+            Check(tracker.Surfaces.Count == 0 && !tracker.HasFloor, "nothing is known before looking");
+            tracker.SetFloorHint(0.02f);
+            Near(tracker.FloorY, 0.02f, "floor height falls back to the device's hint");
+
+            // Look down and ahead: the floor appears.
+            var eye = new Vec3(0, 1.6f, -2.5f);
+            Look(tracker, room, eye, new Vec3(0, -2f, 1f));
+            Check(tracker.Surfaces.Count == 1 && tracker.Surfaces[0].kind == EntityKind.Floor && changes > 0, "only the floor so far: " + string.Join(",", tracker.Surfaces.Select(x => x.kind)));
+            Near(tracker.FloorY, 0f, "floor height measured", 0.02f);
+            float firstArea = tracker.Surfaces[0].size.x * tracker.Surfaces[0].size.z;
+
+            // Look at the back wall: a wall appears, facing into the room.
+            Look(tracker, room, eye, new Vec3(0.2f, 0.1f, 1f));
+            RoomEntity wall = tracker.Surfaces.FirstOrDefault(s => s.kind == EntityKind.Wall);
+            Check(wall != null, "wall found");
+            Near(wall.position.z, SimRoom.BackWallZ, "wall plane", 0.03f);
+            Near(wall.Forward, new Vec3(0, 0, -1), "wall faces the room", 0.05f);
+            Check(wall.size.x > 1.5f && wall.size.y > 1f, "wall has real extent: " + wall.size);
+
+            // Turn toward the table: its top is found, as a volume standing on the floor.
+            RoomEntity realTable = room.Get("table-1");
+            // (From across the room a table top is only a sliver; walking up to it is what reveals it.)
+            var nearTable = new Vec3(-2.0f, 1.6f, -0.7f);
+            Look(tracker, room, nearTable, realTable.TopCenter - nearTable, 14, 12);
+            RoomEntity table = tracker.Surfaces.FirstOrDefault(s => s.kind == EntityKind.Table);
+            Check(table != null, "table found");
+            Near(table.TopCenter.y, 0.75f, "table top height", 0.03f);
+            Check(Vec3.Distance(table.position.Flat, realTable.position.Flat) < 0.3f, "table is where the real one is");
+
+            // Looking around more grows what is known, and ids stay stable.
+            string wallId = wall.id;
+            Look(tracker, room, new Vec3(1.5f, 1.6f, -3f), new Vec3(0.3f, -0.5f, 1f));
+            Look(tracker, room, new Vec3(-1.5f, 1.6f, -3f), new Vec3(-0.3f, -0.5f, 1f));
+            RoomEntity floor = tracker.Surfaces.First(s => s.id == "floor");
+            Check(floor.size.x * floor.size.z > firstArea * 1.5f, "the floor grew as more of it was seen");
+            Check(tracker.Surfaces.Any(s => s.id == wallId), "ids are stable");
+            Check(tracker.Surfaces.Count(s => s.kind == EntityKind.Floor) == 1, "one floor");
+
+            // The found surfaces work as surfaces: a ray hits the tracked wall where the real one is.
+            RayHit hit;
+            Check(GeometryRaycaster.Raycast(tracker.Surfaces, eye, new Vec3(0, 0, 1), 10, out hit), "tracked wall is hittable");
+            Near(hit.position.z, SimRoom.BackWallZ, "at the real wall", 0.03f);
+            tracker.Clear();
+            Check(tracker.Surfaces.Count == 0, "clear");
         }
 
         // ---- runtime -------------------------------------------------------------------------

@@ -1,4 +1,3 @@
-using Spatail.Core;
 using UnityEngine;
 
 namespace Spatail
@@ -34,16 +33,5 @@ namespace Spatail
             new Color(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, a);
 
         public static Color WithAlpha(this Color c, float a) => new Color(c.r, c.g, c.b, a);
-
-        /// <summary>Main colour for an element style.</summary>
-        public static Color StyleColor(string style)
-        {
-            switch (style)
-            {
-                case ElementStyle.Warning: return Warning;
-                case ElementStyle.Success: return Success;
-                default: return Accent;
-            }
-        }
     }
 }

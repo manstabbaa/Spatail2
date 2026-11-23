@@ -1,0 +1,9 @@
+<!--
+  Keeps the script engine and Spatail's core out of managed code stripping. Generated programs reach these
+  through an interpreter, which the stripper cannot see.
+-->
+<linker>
+  <assembly fullname="Jint" preserve="all"/>
+  <assembly fullname="Acornima" preserve="all"/>
+  <assembly fullname="Spatail.Core" preserve="all"/>
+</linker>

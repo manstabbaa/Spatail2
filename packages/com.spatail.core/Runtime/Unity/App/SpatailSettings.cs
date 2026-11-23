@@ -59,6 +59,16 @@ namespace Spatail
             set { PlayerPrefs.SetString(Prefix + "displayName", (value ?? "").Trim()); PlayerPrefs.Save(); }
         }
 
+        /// <summary>
+        /// Whether the stand-in pump hologram is in the room. It is a demo prop for places with no real equipment;
+        /// turn it off to work purely from what the device senses.
+        /// </summary>
+        public bool StandIn
+        {
+            get => PlayerPrefs.GetInt(Prefix + "standIn", 1) == 1;
+            set { PlayerPrefs.SetInt(Prefix + "standIn", value ? 1 : 0); PlayerPrefs.Save(); }
+        }
+
         public TwinMode TwinMode
         {
             get => (TwinMode)PlayerPrefs.GetInt(Prefix + "twinMode", (int)TwinMode.Solid);

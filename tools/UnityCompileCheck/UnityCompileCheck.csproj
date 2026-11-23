@@ -21,6 +21,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" />
+    <Reference Include="Jint"><HintPath>../../packages/com.spatail.core/Runtime/Plugins/Jint.dll</HintPath></Reference>
+    <Reference Include="Acornima"><HintPath>../../packages/com.spatail.core/Runtime/Plugins/Acornima.dll</HintPath></Reference>
   </ItemGroup>
   <ItemGroup Condition="'$(InputSystemDll)' != ''">
     <Reference Include="Unity.InputSystem"><HintPath>$(InputSystemDll)</HintPath></Reference>

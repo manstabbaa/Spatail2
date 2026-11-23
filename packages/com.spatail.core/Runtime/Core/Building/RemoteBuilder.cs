@@ -100,6 +100,29 @@ namespace Spatail.Core
             return points;
         }
 
+        /// <summary>
+        /// Sends a request and its result to the service to keep as an episode: a real moment in a real place that
+        /// can be replayed against the planner later. Returns the saved name, or null if it could not be saved.
+        /// </summary>
+        public async Task<string> SaveEpisodeAsync(BuildRequest request, BuildResult result)
+        {
+            if (request == null) return null;
+            var body = new Dictionary<string, object> { { "request", request.ToJson() } };
+            if (result != null) body["result"] = result.ToJson();
+            try
+            {
+                HttpResult response = await _http.PostJsonAsync(Url("/v1/episodes"), Json.Write(body), Headers(), 30);
+                object parsed;
+                if (response == null || !response.ok || !Json.TryParse(response.body, out parsed)) return null;
+                var o = parsed as Dictionary<string, object>;
+                return o != null ? o.Str("saved") : null;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         static BuildResult Failure(string message) => new BuildResult { reply = message, error = message, builder = "ai" };
     }
 

@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using Spatail.Core;
 using UnityEngine;
 
@@ -9,27 +8,16 @@ namespace Spatail
     public enum TextAlign { Left, Center, Right }
     public enum TextAnchor3D { Top, Middle, Bottom }
 
-    /// <summary>A baked signed-distance-field font: one atlas texture plus glyph metrics in em units.</summary>
+    /// <summary>A baked signed-distance-field font: the atlas texture plus the shared glyph metrics.</summary>
     public sealed class SdfFont
     {
-        public struct Glyph
-        {
-            public float advance;
-            public float left, right, top, bottom;
-            public float u0, u1, v0, v1;
-            public bool visible;
-        }
-
         public Texture2D Atlas { get; private set; }
         public Material Material { get; private set; }
-        public float Ascender { get; private set; }
-        public float Descender { get; private set; }
-        public float LineHeight { get; private set; }
-        public float CapHeight { get; private set; }
-
-        readonly Dictionary<char, Glyph> _glyphs = new Dictionary<char, Glyph>();
+        /// <summary>The same metrics programs measure text with, so layout and rendering always agree.</summary>
+        public FontMetrics Metrics { get; private set; }
 
         static readonly Dictionary<TextWeight, SdfFont> Loaded = new Dictionary<TextWeight, SdfFont>();
+        static FontSet _set;
 
         public static SdfFont Get(TextWeight weight)
         {
@@ -40,19 +28,28 @@ namespace Spatail
             return font;
         }
 
+        /// <summary>Both weights' metrics, for the script runtime.</summary>
+        public static FontSet MetricSet
+        {
+            get
+            {
+                if (_set != null) return _set;
+                _set = new FontSet();
+                _set.Add("medium", Get(TextWeight.Medium).Metrics);
+                _set.Add("semibold", Get(TextWeight.SemiBold).Metrics);
+                return _set;
+            }
+        }
+
         static SdfFont Load(string name)
         {
-            var font = new SdfFont();
+            var font = new SdfFont { Metrics = new FontMetrics() };
             var atlas = Resources.Load<TextAsset>("Spatail/Fonts/" + name + "_atlas");
             var metrics = Resources.Load<TextAsset>("Spatail/Fonts/" + name + "_metrics");
             if (atlas == null || metrics == null)
             {
                 Debug.LogError("[Spatail] Font '" + name + "' is missing from Resources/Spatail/Fonts.");
                 font.Atlas = Texture2D.whiteTexture;
-                font.LineHeight = 1.3f;
-                font.CapHeight = 0.72f;
-                font.Ascender = 0.97f;
-                font.Descender = 0.24f;
             }
             else
             {
@@ -63,50 +60,11 @@ namespace Spatail
                 texture.wrapMode = TextureWrapMode.Clamp;
                 texture.anisoLevel = 4;
                 font.Atlas = texture;
-
-                var json = Json.ParseObject(metrics.text);
-                font.Ascender = json.Float("ascender", 0.97f);
-                font.Descender = json.Float("descender", 0.24f);
-                font.LineHeight = json.Float("lineHeight", 1.3f);
-                font.CapHeight = json.Float("capHeight", 0.72f);
-                var glyphs = json.Obj("glyphs");
-                if (glyphs != null)
-                    foreach (var kv in glyphs)
-                    {
-                        var g = kv.Value as Dictionary<string, object>;
-                        int code;
-                        if (g == null || !int.TryParse(kv.Key, out code)) continue;
-                        font._glyphs[(char)code] = new Glyph
-                        {
-                            advance = g.Float("a"),
-                            left = g.Float("l"), right = g.Float("r"), top = g.Float("t"), bottom = g.Float("b"),
-                            u0 = g.Float("u0"), u1 = g.Float("u1"), v0 = g.Float("v0"), v1 = g.Float("v1"),
-                            visible = g.Has("u0"),
-                        };
-                    }
+                font.Metrics = FontMetrics.Parse(metrics.text);
             }
             font.Material = new Material(Assets.LoadShader(Assets.TextShader)) { name = "Spatail Text " + name };
             font.Material.mainTexture = font.Atlas;
             return font;
-        }
-
-        public bool TryGetGlyph(char c, out Glyph glyph)
-        {
-            if (_glyphs.TryGetValue(c, out glyph)) return true;
-            // Curly quotes and friends that the atlas lacks fall back to their plain forms.
-            return _glyphs.TryGetValue('?', out glyph);
-        }
-
-        /// <summary>Width of a string in em units.</summary>
-        public float Measure(string s, int start, int length)
-        {
-            float w = 0;
-            for (int i = start; i < start + length; i++)
-            {
-                Glyph g;
-                if (TryGetGlyph(s[i], out g)) w += g.advance;
-            }
-            return w;
         }
     }
 
@@ -127,6 +85,8 @@ namespace Spatail
         TextAnchor3D _anchor = TextAnchor3D.Middle;
         float _maxWidth;
         bool _dirty = true;
+        float _opacity = 1f;
+        Material _material;
         Mesh _mesh;
         Vector2 _size;
 
@@ -139,6 +99,23 @@ namespace Spatail
         public TextAnchor3D Anchor { get => _anchor; set { if (_anchor != value) { _anchor = value; _dirty = true; } } }
         /// <summary>Wrap width in metres; 0 disables wrapping.</summary>
         public float MaxWidth { get => _maxWidth; set { if (_maxWidth != value) { _maxWidth = value; _dirty = true; } } }
+
+        /// <summary>Fades the text. Uses a private material only once a value other than 1 is set.</summary>
+        public float Opacity
+        {
+            get => _opacity;
+            set
+            {
+                if (Mathf.Approximately(_opacity, value)) return;
+                _opacity = value;
+                if (_material == null)
+                {
+                    _material = new Material(SdfFont.Get(_weight).Material);
+                    GetComponent<MeshRenderer>().sharedMaterial = _material;
+                }
+                _material.SetFloat("_Opacity", value);
+            }
+        }
 
         /// <summary>Measured width and height of the laid-out block in metres.</summary>
         public Vector2 Size
@@ -175,47 +152,21 @@ namespace Spatail
         void OnDestroy()
         {
             if (_mesh != null) Destroy(_mesh);
-        }
-
-        static List<string> Wrap(SdfFont font, string text, float maxWidthEm)
-        {
-            var lines = new List<string>();
-            foreach (string paragraph in text.Split('\n'))
-            {
-                if (maxWidthEm <= 0f) { lines.Add(paragraph); continue; }
-                var line = new StringBuilder();
-                float width = 0f;
-                float space = font.Measure(" ", 0, 1);
-                foreach (string word in paragraph.Split(' '))
-                {
-                    if (word.Length == 0) continue;
-                    float w = font.Measure(word, 0, word.Length);
-                    if (line.Length > 0 && width + space + w > maxWidthEm)
-                    {
-                        lines.Add(line.ToString());
-                        line.Length = 0;
-                        width = 0f;
-                    }
-                    if (line.Length > 0) { line.Append(' '); width += space; }
-                    line.Append(word);
-                    width += w;
-                }
-                lines.Add(line.ToString());
-            }
-            return lines;
+            if (_material != null) Destroy(_material);
         }
 
         void Rebuild()
         {
             _dirty = false;
-            SdfFont font = SdfFont.Get(_weight);
+            SdfFont sdf = SdfFont.Get(_weight);
+            FontMetrics font = sdf.Metrics;
             var filter = GetComponent<MeshFilter>();
             var meshRenderer = GetComponent<MeshRenderer>();
-            meshRenderer.sharedMaterial = font.Material;
+            meshRenderer.sharedMaterial = _material != null ? _material : sdf.Material;
             meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             meshRenderer.receiveShadows = false;
 
-            List<string> lines = Wrap(font, _text, _maxWidth > 0f ? _maxWidth / _fontSize : 0f);
+            List<string> lines = font.Wrap(_text, _maxWidth > 0f ? _maxWidth / _fontSize : 0f);
             float lineStep = font.LineHeight * _fontSize;
             float cap = font.CapHeight * _fontSize;
             float blockHeight = Mathf.Max(0, lines.Count - 1) * lineStep + cap;
@@ -223,7 +174,7 @@ namespace Spatail
             var widths = new float[lines.Count];
             for (int i = 0; i < lines.Count; i++)
             {
-                widths[i] = font.Measure(lines[i], 0, lines[i].Length) * _fontSize;
+                widths[i] = font.Width(lines[i]) * _fontSize;
                 if (widths[i] > blockWidth) blockWidth = widths[i];
             }
             _size = new Vector2(blockWidth, blockHeight);
@@ -253,7 +204,7 @@ namespace Spatail
                 }
                 foreach (char c in lines[i])
                 {
-                    SdfFont.Glyph g;
+                    FontMetrics.Glyph g;
                     if (!font.TryGetGlyph(c, out g)) continue;
                     if (g.visible)
                     {

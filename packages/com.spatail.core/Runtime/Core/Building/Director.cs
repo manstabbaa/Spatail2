@@ -31,6 +31,10 @@ namespace Spatail.Core
 
         public bool RemoteActive => UseRemote && _remote != null && _remote.IsConfigured;
 
+        /// <summary>The most recent request that went to a builder and what came back, for saving as a test case.</summary>
+        public BuildRequest LastRequest { get; private set; }
+        public BuildResult LastResult { get; private set; }
+
         /// <param name="capture">Fills in the camera frame for the request. May leave it empty.</param>
         public async Task<BuildResult> SubmitAsync(string prompt, Action<BuildRequest> capture)
         {
@@ -66,6 +70,8 @@ namespace Spatail.Core
                 started = Apply(result, repair);
             }
 
+            LastRequest = request;
+            LastResult = result;
             if (started != null && started.Error != null)
             {
                 result.error = started.Error;

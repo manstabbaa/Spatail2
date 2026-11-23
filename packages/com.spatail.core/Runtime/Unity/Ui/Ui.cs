@@ -41,6 +41,10 @@ namespace Spatail
 
         public void SetRadius(float radius) => _material.SetFloat("_Radius", radius);
 
+        public void SetBorder(float width) => _material.SetFloat("_Border", width);
+
+        public void SetOpacity(float opacity) => _material.SetFloat("_Opacity", opacity);
+
         void OnDestroy()
         {
             if (_material != null) Destroy(_material);

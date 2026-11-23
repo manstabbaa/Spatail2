@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Spatail.Core;
 using UnityEngine;
 
@@ -41,7 +42,7 @@ namespace Spatail
             var services = new PlatformServices
             {
                 Head = camera,
-                Room = new SimRoomProvider(),
+                Sensor = new SimSensor(room, camera),
                 TextEntry = keyboard,
                 DeviceName = "sim",
                 WorldUi = worldUi,
@@ -55,14 +56,58 @@ namespace Spatail
         }
     }
 
-    public sealed class SimRoomProvider : IRoomProvider
+    /// <summary>
+    /// Sensing in the simulator: rays are cast against the synthetic room, and the "camera frame" is a render of
+    /// the simulated view, so the real planner can be used from Play mode with no device.
+    /// </summary>
+    public sealed class SimSensor : ISpaceSensor
     {
+        readonly RoomModel _room;
+        readonly Camera _camera;
+
+        public SimSensor(RoomModel room, Camera camera)
+        {
+            _room = room;
+            _camera = camera;
+        }
+
         public bool IsReady => true;
         public string Status => "Simulated room";
-        public RoomModel Capture() => SimRoom.Create();
+        public float FloorY => _room.floorY;
+        public IReadOnlyList<RoomEntity> Surfaces => _room.entities;
 #pragma warning disable 67
         public event Action Changed;
 #pragma warning restore 67
+
+        public bool Raycast(Vec3 origin, Vec3 direction, float maxDistance, out RayHit hit) =>
+            GeometryRaycaster.Raycast(_room.entities, origin, direction, maxDistance, out hit);
+
+        public void Capture(Action<ViewFrame, byte[]> done)
+        {
+            const int width = 1024, height = 768;
+            var view = ViewFrame.FromFov(_camera.transform.position.ToCore(), _camera.transform.rotation.ToCore(), _camera.fieldOfView, (float)width / height, width, height);
+            byte[] jpeg = null;
+            RenderTexture target = RenderTexture.GetTemporary(width, height, 24);
+            RenderTexture previousTarget = _camera.targetTexture, previousActive = RenderTexture.active;
+            try
+            {
+                _camera.targetTexture = target;
+                _camera.Render();
+                RenderTexture.active = target;
+                var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+                texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                texture.Apply();
+                jpeg = texture.EncodeToJPG(80);
+                UnityEngine.Object.Destroy(texture);
+            }
+            finally
+            {
+                _camera.targetTexture = previousTarget;
+                RenderTexture.active = previousActive;
+                RenderTexture.ReleaseTemporary(target);
+            }
+            done(view, jpeg);
+        }
     }
 
     /// <summary>Draws the simulated room so content has something to sit in: a gridded floor and pale walls.</summary>

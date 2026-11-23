@@ -204,6 +204,20 @@ namespace Spatail
             return this;
         }
 
+        /// <summary>One free-standing triangle with a flat normal, visible from both sides.</summary>
+        public MeshBuilder AddTriangle(Vector3 a, Vector3 b, Vector3 c, Color ca, Color cb, Color cc)
+        {
+            Vector3 normal = Vector3.Cross(b - a, c - a).normalized;
+            if (normal.sqrMagnitude < 1e-10f) return this;
+            for (int side = 0; side < 2; side++)
+            {
+                Vector3 n = side == 0 ? normal : -normal;
+                int i0 = Vertex(a, n, ca, Vector2.zero), i1 = Vertex(b, n, cb, Vector2.zero), i2 = Vertex(c, n, cc, Vector2.zero);
+                Triangle(i0, i1, i2);
+            }
+            return this;
+        }
+
         public Mesh ToMesh(string name = "Spatail Mesh")
         {
             var mesh = new Mesh { name = name };
