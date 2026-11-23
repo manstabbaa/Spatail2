@@ -1,0 +1,36 @@
+// "Put this month's output by the bench"
+// A bar chart with a trend line, standing on free floor beside the workbench.
+const values = [38, 44, 41, 52, 49, 61, 58, 66, 78, 86];
+const bench = space.prop('workbench') || space.surfaces().find(s => s.kind === 'table');
+const pitch = 0.085, barWidth = 0.055, maxHeight = 0.42, depth = 0.24;
+const width = values.length * pitch + 0.12;
+
+const spot = space.freeFloorNear(bench || user.head, width / 2);
+const chart = scene.group({ position: spot, rotation: space.faceUser(spot) });
+
+// Base slab: an accent rim under a white top.
+scene.box({ parent: chart, size: [width + 0.012, 0.01, depth + 0.012], position: [0, 0.005, 0], color: 'accent' });
+scene.box({ parent: chart, size: [width, 0.014, depth], position: [0, 0.009, 0], color: 'surface' });
+
+const top = Math.max(...values);
+const tips = values.map((v, i) => {
+  const h = Math.max(0.02, (v / top) * maxHeight);
+  const x = (i - (values.length - 1) / 2) * pitch;
+  // Each bar hangs from a pivot at its base so it can grow upward.
+  const pivot = scene.group({ parent: chart, position: [x, 0.016, 0.02], scale: [1, 0.0001, 1] });
+  scene.box({ parent: pivot, size: [barWidth, h, barWidth], position: [0, h / 2, 0], color: '#8C7FF0' });
+  pivot.animate({ scale: [1, 1, 1] }, { duration: 0.45, delay: 0.15 + i * 0.06 });
+  return [x, 0.016 + h + 0.04, 0.02];
+});
+
+// The trend line arrives once the bars are up.
+scene.after(0.2 + values.length * 0.06 + 0.4, () => {
+  scene.line({ parent: chart, points: tips, width: 0.005, color: 'accentDeep' });
+  tips.forEach(p => scene.sphere({ parent: chart, radius: 0.008, position: p, color: 'accentDeep', shade: false }));
+});
+
+// Title plate along the front edge, tipped back toward the reader.
+const plate = kit.pill('Output this month  ·  ×100 m³', { style: 'outline', size: 0.025 });
+chart.add(plate);
+plate.position = [0, 0.05, -depth / 2 - 0.035];
+plate.rotation = [35, 0, 0];

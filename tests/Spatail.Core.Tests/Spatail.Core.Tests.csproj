@@ -14,6 +14,11 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The same binaries the Unity package ships, so tests exercise exactly what runs on device. -->
+    <Reference Include="Jint"><HintPath>../../packages/com.spatail.core/Runtime/Plugins/Jint.dll</HintPath></Reference>
+    <Reference Include="Acornima"><HintPath>../../packages/com.spatail.core/Runtime/Plugins/Acornima.dll</HintPath></Reference>
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="../../packages/com.spatail.core/Runtime/Core/**/*.cs" LinkBase="Core" />
   </ItemGroup>
 </Project>

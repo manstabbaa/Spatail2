@@ -46,8 +46,6 @@ namespace Spatail.Core
         public event Action<Peer> PeerJoined;
         public event Action<Peer> PeerLeft;
         public event Action<Peer> PeerMoved;
-        /// <summary>A plan arrived from a peer and should be applied locally.</summary>
-        public event Action<PlanResult, Peer> PlanReceived;
         /// <summary>Host only: a peer asked for a prompt to be planned.</summary>
         public event Action<string, Peer> PromptReceived;
         /// <summary>Client only: the host's status line for a prompt.</summary>
@@ -145,8 +143,6 @@ namespace Spatail.Core
         }
 
         // ---- sending -----------------------------------------------------------------------
-
-        public void SendPlan(PlanResult plan) => Broadcast(SessionMessage.MakePlan(plan), null);
 
         public void SendPrompt(string text) => Broadcast(SessionMessage.MakePrompt(text, LocalName), null);
 
@@ -267,16 +263,6 @@ namespace Spatail.Core
                     // The host relays presence so every participant sees every other one.
                     if (IsHost) Broadcast(line, c);
                     break;
-
-                case SessionMessage.Plan:
-                {
-                    var planJson = msg.Obj("plan");
-                    if (planJson == null) break;
-                    PlanResult plan = SpecJson.PlanFromJson(planJson);
-                    Post(() => { if (PlanReceived != null) PlanReceived(plan, c.peer); });
-                    if (IsHost) Broadcast(line, c);
-                    break;
-                }
 
                 case SessionMessage.Prompt:
                 {

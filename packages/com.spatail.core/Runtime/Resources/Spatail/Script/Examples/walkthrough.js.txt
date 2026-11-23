@@ -1,0 +1,53 @@
+// "Build me a walkthrough for this pump"
+// A pin on every part the procedure touches, a card for the current step, and a turn arrow where something
+// has to be turned. Tap a pin or say "next" / "back" to move through it.
+const steps = [
+  { part: 'control box', title: 'Stop and lock out', body: 'Press STOP, then lock the isolator in the OFF position.' },
+  { part: 'gate valve', title: 'Close this valve', body: 'Turn the handwheel clockwise until it stops.', turn: 'clockwise' },
+  { part: 'coupling', title: 'Check the shaft is still', body: 'Confirm the coupling has stopped before removing the guard.' },
+].map(s => ({ ...s, prop: space.prop(s.part) })).filter(s => s.prop);
+
+let current = -1;
+let showing = [];
+
+const pins = steps.map((s, i) => {
+  const pin = kit.pin(i + 1, space.topOf(s.prop));
+  pin.onClick(() => show(i));
+  kit.appear(pin, { delay: i * 0.08 });
+  return pin;
+});
+
+function show(i) {
+  if (i < 0 || i >= steps.length) return;
+  showing.forEach(n => n.remove());
+  showing = [];
+  current = i;
+  state.step = i;
+  pins.forEach((p, k) => p.head.scale = k === i ? 1.3 : 1);
+
+  const s = steps[i], last = i === steps.length - 1;
+  const at = space.beside(s.prop);
+  const card = kit.card({
+    position: at, rotation: space.faceUser(at, 35),
+    number: i + 1, title: s.title, body: s.body, footnote: `${i + 1} of ${steps.length}`,
+    buttons: [
+      ...(i > 0 ? [{ text: 'Back', primary: false, onClick: () => show(i - 1) }] : []),
+      { text: last ? 'Done' : 'Next', onClick: () => (last ? finish() : show(i + 1)) },
+    ],
+  });
+  kit.appear(card);
+  showing.push(card);
+
+  if (s.turn) {
+    // Centre the arrow on the part's action point (the handwheel) when it has one.
+    const centre = s.prop.actionPoint || space.topOf(s.prop);
+    const radius = Math.max(s.prop.size[0], s.prop.size[2]) / 2 + 0.045;
+    showing.push(kit.arcArrow({ position: centre, radius, clockwise: s.turn === 'clockwise' }));
+  } else {
+    showing.push(kit.glow(s.prop));
+  }
+}
+
+voice.on(['next', 'continue', 'done', 'go on'], () => (current === steps.length - 1 ? finish() : show(current + 1)));
+voice.on(['back', 'previous'], () => show(current - 1));
+show(Math.min(state.step || 0, steps.length - 1));

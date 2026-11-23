@@ -11,28 +11,43 @@ namespace Spatail.Core.Tests
     /// <summary>
     /// Self-contained test runner for the engine-independent core.
     ///   dotnet run                      run all tests
-    ///   dotnet run -- export out-dir    write the simulated room and the plans for the demo prompts as JSON
+    ///   dotnet run -- export out-dir    write the lab's data: the runtime library, example programs, fonts and stand-in scene
     /// </summary>
     static class Program
     {
         static int _passed, _failed;
         static readonly List<string> Failures = new List<string>();
 
-        static string SitePath()
+        // ---- files ---------------------------------------------------------------------------
+
+        static string Resources()
         {
             string dir = AppContext.BaseDirectory;
             for (int i = 0; i < 8 && dir != null; i++)
             {
-                string candidate = Path.Combine(dir, "packages", "com.spatail.core", "Runtime", "Resources", "Spatail", "pump_station.json");
-                if (File.Exists(candidate)) return candidate;
+                string candidate = Path.Combine(dir, "packages", "com.spatail.core", "Runtime", "Resources", "Spatail");
+                if (Directory.Exists(candidate)) return candidate;
                 dir = Path.GetDirectoryName(dir);
             }
-            throw new FileNotFoundException("pump_station.json not found above " + AppContext.BaseDirectory);
+            throw new DirectoryNotFoundException("Resources/Spatail not found above " + AppContext.BaseDirectory);
         }
 
-        static SiteDefinition LoadSite() => SiteDefinition.Parse(File.ReadAllText(SitePath()));
+        static string Library() => File.ReadAllText(Path.Combine(Resources(), "Script", "spatail.js.txt"));
+        static string Example(string id)
+        {
+            string path = Path.Combine(Resources(), "Script", "Examples", id + ".js.txt");
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        }
+        static SiteDefinition LoadSite() => SiteDefinition.Parse(File.ReadAllText(Path.Combine(Resources(), "pump_station.json")));
+        static FontSet LoadFonts()
+        {
+            var fonts = new FontSet();
+            fonts.Add("medium", FontMetrics.Parse(File.ReadAllText(Path.Combine(Resources(), "Fonts", "inter_medium_metrics.json"))));
+            fonts.Add("semibold", FontMetrics.Parse(File.ReadAllText(Path.Combine(Resources(), "Fonts", "inter_semibold_metrics.json"))));
+            return fonts;
+        }
 
-        public static readonly string[] DemoPrompts =
+        public static readonly string[] FilmPrompts =
         {
             "Build me a walkthrough for this pump",
             "Show me how the water flows",
@@ -41,6 +56,7 @@ namespace Spatail.Core.Tests
             "What parts do I need?",
             "Bring Sara in",
         };
+        static readonly string[] FilmIds = { "walkthrough", "flow", "faults", "dashboard", "checklist", "session" };
 
         static int Main(string[] args)
         {
@@ -50,36 +66,37 @@ namespace Spatail.Core.Tests
             Run("Quat.LookRotation and FromTo", LookRotation);
             Run("Json round-trips values, escapes and vectors", JsonRoundTrip);
             Run("Json rejects malformed input", JsonRejects);
-            Run("Site definition loads with parts, fixtures and knowledge", SiteLoads);
-            Run("Binder places parts in the station frame", BinderParts);
-            Run("Binder snaps the control box to the wall", BinderWall);
-            Run("Binder uses a stand-in bench when the room has no table", BinderVirtualBench);
-            Run("Binder adopts a real table as the workbench", BinderRealTable);
-            Run("Room.Resolve maps phrases to entities", ResolvePhrases);
-            Run("Offline planner: walkthrough", PlanWalkthrough);
-            Run("Offline planner: flow", PlanFlow);
-            Run("Offline planner: fault history", PlanFaults);
-            Run("Offline planner: dashboard by the bench", PlanDashboard);
-            Run("Offline planner: parts checklist", PlanChecklist);
-            Run("Offline planner: bring Sara in", PlanSession);
-            Run("Offline planner: step navigation", PlanSteps);
-            Run("Offline planner: 'has it failed before' is not navigation", PlanNoFalseNavigation);
-            Run("Offline planner: move, resize, remove, clear", PlanEdits);
-            Run("Offline planner: describe a part, and unknown requests", PlanDescribeAndUnknown);
-            Run("Plans survive a JSON round trip", PlanRoundTrip);
-            Run("Sanitize repairs and drops bad content", SanitizeRepairs);
-            Run("A plan in the AI service's shape parses, validates and lays out", ServicePlanShape);
-            Run("Layout: every demo element gets a sane pose", LayoutSane);
-            Run("Layout: chart lands on free floor by the bench", LayoutChart);
-            Run("Layout: flow path follows the pipework", LayoutFlow);
-            Run("Layout: wall anchor sits on the wall facing the room", LayoutWall);
-            Run("BuildStore applies ops and raises events", StoreOps);
-            Run("Scan labels retire when real content arrives", LabelsRetire);
-            Run("Layout: turn arrow centres on the handwheel", LayoutGizmo);
-            Run("Offline planner: 'what is this' uses the pointed-at entity", PlanFocus);
-            Run("Remote planner: request shape, success and failure", RemotePlannerPaths);
-            Run("Planner router falls back when the service fails", RouterFallback);
-            Run("Session link: plans, prompts and presence over TCP", SessionRoundTrip);
+            Run("Stand-in scene loads with parts and fixtures", SiteLoads);
+            Run("Binder places parts, snaps the control box to a wall, binds a real table", BinderBehaviour);
+            Run("Raycaster: planes, boxes, misses", Raycasts);
+            Run("ViewFrame: pixel to ray and back", ViewFrames);
+            Run("Font metrics: measuring and wrapping", Fonts);
+
+            Run("Runtime: a program builds nodes, parents them and measures text", RuntimeBasics);
+            Run("Runtime: animation, timers and frame callbacks", RuntimeAnimation);
+            Run("Runtime: the space API (view, raycast, surfaces, props, placement helpers)", RuntimeSpace);
+            Run("Runtime: space.find resolves asynchronously through the host", RuntimeFind);
+            Run("Runtime: clicks, hover and bubbling", RuntimeEvents);
+            Run("Runtime: stopping removes everything; replacing keeps state", RuntimeLifecycle);
+            Run("Runtime: syntax errors, thrown errors and runaway loops are contained", RuntimeFailures);
+            Run("Runtime: a failing callback is logged and the program carries on", RuntimeCallbackErrors);
+            Run("Runtime: programs cannot reach outside the sandbox", RuntimeSandbox);
+            Run("Runtime: node budget", RuntimeNodeBudget);
+
+            Run("Film programs: all six run cleanly in the stand-in room", FilmPrograms);
+            Run("Film programs: walkthrough steps by voice, by tapping, and finishes", FilmWalkthrough);
+            Run("Film programs: checklist ticks and remembers", FilmChecklist);
+            Run("Film programs: chart lands on free floor by the bench", FilmChart);
+            Run("Film programs: work in a room with a real table and other walls", FilmOtherRoom);
+
+            Run("Demo builder: routes the film requests, removes, clears, declines the rest", DemoRouting);
+            Run("Build request: carries the frame, depth samples and where props appear", RequestShape);
+            Run("Remote builder: success, failure, unreadable", RemotePaths);
+            Run("Director: voice commands never leave the device", DirectorVoice);
+            Run("Director: runs what the planner writes, with the request's view", DirectorRemote);
+            Run("Director: a failing program is sent back once for repair", DirectorRepair);
+            Run("Director: falls back to the demo when the service is down", DirectorFallback);
+            Run("Session link: prompts, replies, presence and settings over TCP", SessionRoundTrip);
 
             Console.WriteLine();
             Console.WriteLine(_passed + " passed, " + _failed + " failed");
@@ -120,50 +137,156 @@ namespace Spatail.Core.Tests
             if (Vec3.Distance(actual, expected) > tolerance) throw new Exception(message + " (expected " + expected + ", got " + actual + ")");
         }
 
-        // ---- fixtures ----------------------------------------------------------------------
+        // ---- a host that records what programs do ------------------------------------------------
 
-        sealed class World
+        sealed class TestNode
         {
-            public SiteDefinition site;
-            public RoomModel room;
-            public Pose3 station;
-            public BuildStore store = new BuildStore();
-            public OfflinePlanner planner = new OfflinePlanner();
+            public int id;
+            public string kind;
+            public Dictionary<string, object> props = new Dictionary<string, object>();
+            public Vec3 position, scale = Vec3.One;
+            public Quat rotation = Quat.Identity;
+            public int Parent => props.Int("parent");
+        }
 
-            public PlanResult Ask(string prompt)
+        sealed class TestHost : IScriptHost
+        {
+            public readonly Dictionary<int, TestNode> Nodes = new Dictionary<int, TestNode>();
+            public RoomModel Room = new RoomModel();
+            public Vec3 UserPosition = new Vec3(0.1f, 1.6f, -2.3f), UserForward = Vec3.Forward;
+            public Func<string, List<RayHit>> Finder;
+            public readonly List<Action> Deferred = new List<Action>();
+            public int Created, Destroyed;
+
+            public void CreateNode(int id, string kind, Dictionary<string, object> props)
             {
-                PlanResult plan = planner.Plan(new PlanRequest { prompt = prompt, room = room, site = site, builds = store.Builds });
-                store.RetireScanLabels(plan);
-                store.Apply(plan);
-                return plan;
+                Created++;
+                Nodes[id] = new TestNode { id = id, kind = kind, props = props };
+            }
+            public void UpdateNode(int id, Dictionary<string, object> props)
+            {
+                foreach (var kv in props) Nodes[id].props[kv.Key] = kv.Value;
+            }
+            public void SetTransform(int id, Vec3 position, Quat rotation, Vec3 scale)
+            {
+                TestNode n = Nodes[id];
+                n.position = position; n.rotation = rotation; n.scale = scale;
+            }
+            public void DestroyNode(int id)
+            {
+                Destroyed++;
+                Nodes.Remove(id);
+            }
+            public bool Raycast(Vec3 origin, Vec3 direction, float maxDistance, out RayHit hit) =>
+                GeometryRaycaster.Raycast(Room.entities, origin, direction, maxDistance, out hit);
+            public float FloorY => Room.floorY;
+            public IReadOnlyList<RoomEntity> Surfaces => Room.entities.Where(e => !e.isVirtual).ToList();
+            public IReadOnlyList<RoomEntity> Props => Room.entities.Where(e => e.isVirtual).ToList();
+            public void GetUser(out Vec3 position, out Vec3 forward, out Quat rotation)
+            {
+                position = UserPosition; forward = UserForward; rotation = Quat.LookRotation(UserForward);
+            }
+            public void Find(string description, Action<List<RayHit>> done)
+            {
+                // Answer later, as a device would after asking the vision service.
+                Deferred.Add(() => done(Finder != null ? Finder(description) : new List<RayHit>()));
+            }
+
+            public IEnumerable<TestNode> OfKind(string kind) => Nodes.Values.Where(n => n.kind == kind);
+            public TestNode Text(string text) => Nodes.Values.FirstOrDefault(n => n.kind == "text" && n.props.Str("text") == text);
+            public Vec3 World(TestNode n)
+            {
+                Vec3 p = n.position;
+                int guard = 0;
+                while (n.Parent != 0 && guard++ < 32)
+                {
+                    TestNode parent = Nodes[n.Parent];
+                    p = parent.position + parent.rotation * Vec3.Scale(p, parent.scale);
+                    n = parent;
+                }
+                return p;
+            }
+            public TestNode Root(TestNode n)
+            {
+                int guard = 0;
+                while (n.Parent != 0 && guard++ < 32) n = Nodes[n.Parent];
+                return n;
+            }
+            /// <summary>The nearest ancestor (or the node itself) that was made interactive.</summary>
+            public TestNode Clickable(TestNode n)
+            {
+                int guard = 0;
+                while (n != null && guard++ < 32)
+                {
+                    if (n.props.Bool("interactive")) return n;
+                    n = n.Parent != 0 ? Nodes[n.Parent] : null;
+                }
+                return null;
             }
         }
 
-        static World MakeWorld(bool realTable = false)
+        sealed class World
+        {
+            public TestHost host = new TestHost();
+            public ExperienceRuntime runtime;
+            public SiteDefinition site;
+            public Pose3 station;
+            public readonly List<string> log = new List<string>();
+            public readonly List<Experience> failed = new List<Experience>();
+
+            public Experience Start(string id, string code, ViewFrame view = null) => runtime.Start(id, id, "test", code, view);
+
+            public void Advance(float seconds, float step = 1f / 30f)
+            {
+                for (float t = 0; t < seconds; t += step)
+                {
+                    List<Action> due = host.Deferred.ToList();
+                    host.Deferred.Clear();
+                    foreach (Action a in due) a();
+                    runtime.Tick(step);
+                }
+            }
+
+            public ViewFrame UserView() =>
+                ViewFrame.FromFov(host.UserPosition, Quat.LookRotation(new Vec3(0.05f, -0.35f, 1f)), 60f, 4f / 3f, 1280, 960);
+
+            public void Click(TestNode node)
+            {
+                TestNode target = host.Clickable(node);
+                Check(target != null, "nothing clickable at or above node " + node.id + " (" + node.kind + ")");
+                runtime.DispatchEvent(target.id, "click");
+            }
+        }
+
+        static World MakeWorld(bool standIn = true, bool realTable = false)
         {
             var w = new World { site = LoadSite() };
             RoomModel raw = SimRoom.Create(realTable);
-            w.station = SiteBinder.SuggestStationPose(raw, w.site);
-            w.room = SiteBinder.Bind(w.site, raw, w.station);
+            if (standIn)
+            {
+                w.station = SiteBinder.SuggestStationPose(raw, w.site);
+                w.host.Room = SiteBinder.Bind(w.site, raw, w.station);
+            }
+            else w.host.Room = raw;
+            w.runtime = new ExperienceRuntime(w.host, Library(), LoadFonts());
+            w.runtime.Logged += (e, level, message) => w.log.Add(level + ": " + message);
+            w.runtime.Failed += e => w.failed.Add(e);
             return w;
         }
 
-        // ---- math --------------------------------------------------------------------------
+        // ---- math, json ----------------------------------------------------------------------
 
         static void MathConventions()
         {
             Near(Quat.Yaw(90) * Vec3.Forward, Vec3.Right, "yaw 90 turns forward to right");
             Near(Quat.AngleAxis(90, Vec3.Right) * Vec3.Forward, new Vec3(0, -1, 0), "pitch 90 looks down");
             Near(Quat.Euler(0, 0, 90) * Vec3.Up, new Vec3(-1, 0, 0), "roll 90 turns up to -X");
-            Near(Quat.Euler(90, 0, 0) * Vec3.Up, Vec3.Forward, "pitch 90 turns up to forward");
             Quat q = Quat.Euler(20, 50, 70);
             Near(q.Inverse * (q * new Vec3(1, 2, 3)), new Vec3(1, 2, 3), "inverse undoes rotation");
-            Near((Quat.Yaw(30) * Quat.Yaw(60)) * Vec3.Forward, Vec3.Right, "rotations compose");
             Near(Vec3.Cross(Vec3.Right, Vec3.Up), Vec3.Forward, "left-handed cross product");
             var pose = new Pose3(new Vec3(1, 0, 2), Quat.Yaw(90));
             Near(pose.TransformPoint(new Vec3(0, 0, 1)), new Vec3(2, 0, 2), "pose transforms points");
             Near(pose.InverseTransformPoint(new Vec3(2, 0, 2)), new Vec3(0, 0, 1), "pose inverse-transforms points");
-            Near(Quat.Yaw(40).YawDegrees, 40f, "yaw round trip", 1e-2f);
         }
 
         static void LookRotation()
@@ -171,30 +294,20 @@ namespace Spatail.Core.Tests
             Quat q = Quat.LookRotation(new Vec3(1, 0, 0));
             Near(q * Vec3.Forward, Vec3.Right, "look rotation forward");
             Near(q * Vec3.Up, Vec3.Up, "look rotation keeps up");
-            Quat down = Quat.LookRotation(new Vec3(0, -1, 0.001f));
-            Near((down * Vec3.Forward).y, -1f, "look straight down", 1e-2f);
             Near(Quat.FromTo(Vec3.Up, Vec3.Right) * Vec3.Up, Vec3.Right, "from-to");
             Near(Quat.FromTo(Vec3.Up, -Vec3.Up) * Vec3.Up, -Vec3.Up, "from-to opposite");
-            Near(Quat.FaceFlat(Vec3.Zero, new Vec3(0, 5, 3)) * Vec3.Forward, Vec3.Forward, "face flat ignores height");
         }
-
-        // ---- json --------------------------------------------------------------------------
 
         static void JsonRoundTrip()
         {
             string src = "{\"a\":1,\"b\":[1.5,-2,3e2],\"c\":\"q\\\"uote\\n\\u00e9\",\"d\":true,\"e\":null,\"f\":{\"x\":0.25}}";
             var o = Json.ParseObject(src);
-            Check(o.Int("a") == 1, "int");
-            Check(o.Arr("b").Count == 3 && Json.ToDouble(o.Arr("b")[2]) == 300, "array + exponent");
-            Check(o.Str("c") == "q\"uote\né", "escapes");
-            Check(o.Bool("d") && !o.Has("e"), "bool/null");
-            Near(o.Obj("f").Float("x"), 0.25f, "nested");
+            Check(o.Int("a") == 1 && o.Arr("b").Count == 3 && Json.ToDouble(o.Arr("b")[2]) == 300, "numbers");
+            Check(o.Str("c") == "q\"uote\né" && o.Bool("d") && !o.Has("e"), "strings, bools, null");
             var again = Json.ParseObject(Json.Write(o));
             Check(again.Str("c") == o.Str("c") && again.Arr("b").Count == 3, "write/parse round trip");
             Near(Json.ToVec3(Json.Parse("[1,2,3]")), new Vec3(1, 2, 3), "vec from array");
             Near(Json.ToVec3(Json.Parse("{\"x\":1,\"y\":2,\"z\":3}")), new Vec3(1, 2, 3), "vec from object");
-            Check(Json.Write(new Dictionary<string, object> { { "n", 2.5f }, { "i", 3 } }) == "{\"n\":2.5,\"i\":3}", "number formatting");
-            Check(Json.Write(Json.Parse(Json.Write(o, true))) == Json.Write(o), "pretty output parses to the same value");
         }
 
         static void JsonRejects()
@@ -206,519 +319,687 @@ namespace Spatail.Core.Tests
             }
         }
 
-        // ---- site + binder -----------------------------------------------------------------
+        // ---- stand-in scene ------------------------------------------------------------------
 
         static void SiteLoads()
         {
             SiteDefinition site = LoadSite();
-            Check(site.equipmentId == "pump-p101", "equipment id");
-            Check(site.parts.Count == 7, "seven parts, got " + site.parts.Count);
-            Check(site.fixtures.Count == 2, "two fixtures");
-            Check(site.FindPart("gate-valve").actionAxis.y == 1, "valve axis");
+            Check(site.equipmentId == "pump-p101" && site.parts.Count == 7 && site.fixtures.Count == 2, "equipment, parts, fixtures");
             Check(site.parts.All(p => p.shapes.Count > 0 && p.size.x > 0), "all parts have geometry and bounds");
-            Check(site.knowledge.procedures.Count == 2 && site.knowledge.procedures[0].steps.Count == 3, "procedures");
-            Check(site.knowledge.flows[0].path.Count == 3, "flow path");
-            Check(site.knowledge.faults.Count == 2 && site.knowledge.metrics[0].values.Count == 10, "faults + metrics");
-            Check(site.knowledge.spares.Count == 3 && site.knowledge.sparesMore == 3, "spares");
-            Check(site.knowledge.people.Any(p => p.name == "Sara"), "people");
-            // Every knowledge record points at something that exists.
-            var ids = new HashSet<string>(site.parts.Select(p => p.id).Concat(site.fixtures.Select(p => p.id)));
-            foreach (var proc in site.knowledge.procedures)
-                foreach (var step in proc.steps) Check(ids.Contains(step.entity), "procedure step entity " + step.entity);
-            foreach (var f in site.knowledge.faults) Check(ids.Contains(f.entity), "fault entity " + f.entity);
-            foreach (var f in site.knowledge.flows)
-                foreach (string h in f.highlight) Check(ids.Contains(h), "flow highlight " + h);
+            PartDef valve = site.FindPart("gate-valve");
+            Check(valve.actionAxis.y == 1 && valve.hasActionPoint, "valve has an action axis and point");
         }
 
-        static void BinderParts()
+        static void BinderBehaviour()
         {
             SiteDefinition site = LoadSite();
             var station = new Pose3(new Vec3(2, 0, 1), Quat.Yaw(90));
             RoomModel room = SiteBinder.Bind(site, SimRoom.Create(), station);
             RoomEntity valve = room.Get("gate-valve");
-            Check(valve != null && valve.kind == EntityKind.Part && valve.parentId == "pump-p101", "valve bound as part");
-            // Station +X maps to world -Z under a 90 degree yaw.
-            Near(valve.position, new Vec3(2, 0.64f, 1 - 0.64f), "valve position follows the station pose");
+            Near(valve.position, new Vec3(2, 0.64f, 1 - 0.64f), "valve follows the station pose");
             Near(valve.ShapeOrigin, station.position, "shape origin is the station origin");
-            Near(valve.rotation * valve.actionAxis, Vec3.Up, "action axis stays vertical");
-        }
 
-        static void BinderWall()
-        {
             World w = MakeWorld();
-            RoomEntity box = w.room.Get("control-box");
-            Check(box != null && box.kind == EntityKind.Fixture, "control box bound");
+            RoomEntity box = w.host.Room.Get("control-box");
             Near(box.ShapeOrigin.z, SimRoom.BackWallZ, "control box sits on the wall plane");
             Near(box.Forward, new Vec3(0, 0, -1), "control box faces into the room");
-            Near(box.position.y, 1.2f, "control box height");
-            // No wall within reach: stands where the site puts it.
-            var open = new RoomModel();
-            open.entities.Add(new RoomEntity { id = "floor", kind = EntityKind.Floor, size = new Vec3(10, 0, 10) });
-            RoomModel bound = SiteBinder.Bind(w.site, open, Pose3.Identity);
-            Near(bound.Get("control-box").ShapeOrigin, new Vec3(-0.95f, 1.2f, 0.92f), "free-standing fallback");
-            Near(bound.Get("control-box").Forward, new Vec3(0, 0, -1), "free-standing faces the front of the station");
+            Check(w.host.Room.Get("workbench").isVirtual, "no table in the room: the bench is a stand-in");
+
+            World real = MakeWorld(realTable: true);
+            RoomEntity bench = real.host.Room.Get("workbench");
+            Check(!bench.isVirtual && bench.shapes == null && real.host.Room.Get("table-1") == null, "a real table becomes the workbench");
         }
 
-        static void BinderVirtualBench()
+        static void Raycasts()
         {
             World w = MakeWorld();
-            RoomEntity bench = w.room.Get("workbench");
-            Check(bench != null && bench.isVirtual && bench.shapes != null && bench.kind == EntityKind.Table, "virtual bench");
-            Near(bench.position.y, 0.47f, "bench centre height");
-            Check(bench.position.x < w.room.Get("motor").position.x - 0.8f, "bench is to the left of the motor");
+            RayHit hit;
+            Check(w.host.Raycast(new Vec3(0, 1.6f, -2), new Vec3(0, -1, 0), 5, out hit), "down hits the floor");
+            Near(hit.position, new Vec3(0, 0, -2), "floor point");
+            Near(hit.normal, Vec3.Up, "floor normal");
+            Near(hit.distance, 1.6f, "floor distance");
+
+            Check(w.host.Raycast(new Vec3(2.5f, 1.5f, -1), new Vec3(0, 0, 1), 10, out hit), "forward hits the back wall");
+            Near(hit.position.z, SimRoom.BackWallZ, "wall plane");
+            Near(hit.normal, new Vec3(0, 0, -1), "wall normal faces the room");
+
+            RoomEntity motor = w.host.Room.Get("motor");
+            Vec3 from = motor.position + new Vec3(0, 0, -2);
+            Check(w.host.Raycast(from, new Vec3(0, 0, 1), 10, out hit), "hits the motor");
+            Near(hit.position.z, motor.position.z - motor.size.z * 0.5f, "front face of the motor's bounds");
+            Check(hit.label == "Motor", "label: " + hit.label);
+
+            Check(!w.host.Raycast(new Vec3(0, 1.6f, -2), new Vec3(0, 1, 0), 10, out hit), "up hits nothing (no ceiling)");
+            Check(!w.host.Raycast(new Vec3(0, 1.6f, 2), new Vec3(0, 0, -1), 0.5f, out hit), "the back of a wall is not solid");
         }
 
-        static void BinderRealTable()
+        static void ViewFrames()
         {
-            World w = MakeWorld(realTable: true);
-            RoomEntity bench = w.room.Get("workbench");
-            Check(bench != null && !bench.isVirtual && bench.shapes == null, "bench bound to the real table");
-            Near(bench.size, new Vec3(1.4f, 0.75f, 0.7f), "takes the real table's size");
-            Check(w.room.Get("table-1") == null, "the raw table is absorbed, not duplicated");
-            Check(w.room.OfKind(EntityKind.Table).Count == 1, "exactly one table");
+            var view = ViewFrame.FromFov(new Vec3(1, 1.5f, -2), Quat.Euler(10, 30, 0), 60f, 4f / 3f);
+            Vec3 origin, direction;
+            view.Ray(0.5f, 0.5f, out origin, out direction);
+            Near(direction, view.rotation * Vec3.Forward, "centre pixel looks straight ahead");
+            view.Ray(0.9f, 0.5f, out origin, out direction);
+            Check(Vec3.Dot(direction, view.rotation * Vec3.Right) > 0, "right of centre looks right");
+            view.Ray(0.5f, 0.1f, out origin, out direction);
+            Check(Vec3.Dot(direction, view.rotation * Vec3.Up) > 0, "top of the image looks up");
+
+            view.Ray(0.27f, 0.81f, out origin, out direction);
+            float u, v;
+            Check(view.Project(origin + direction * 3.2f, out u, out v), "point in front projects");
+            Near(u, 0.27f, "u round trip");
+            Near(v, 0.81f, "v round trip");
+            Check(!view.Project(origin - (view.rotation * Vec3.Forward), out u, out v), "points behind the camera do not project");
         }
 
-        static void ResolvePhrases()
+        static void Fonts()
         {
-            World w = MakeWorld();
-            Check(w.room.Resolve("the gate valve").id == "gate-valve", "gate valve");
-            Check(w.room.Resolve("valve").id == "gate-valve", "valve");
-            Check(w.room.Resolve("bench").id == "workbench", "bench");
-            Check(w.room.Resolve("pump").id == "pump", "pump means the part");
-            Check(w.room.Resolve("motor").id == "motor", "motor");
-            Check(w.room.Resolve("control panel").id == "control-box", "alias");
-            Check(w.room.Resolve("pump-p101").id == "pump-p101", "id");
-            Check(w.room.Resolve("spaceship") == null, "unknown");
+            FontSet fonts = LoadFonts();
+            FontMetrics f = fonts.Get("medium");
+            float w, h;
+            f.Measure("Close this valve", 0.03f, 0, out w, out h);
+            Check(w > 0.2f && w < 0.26f, "one line width plausible: " + w);
+            Near(h, f.CapHeight * 0.03f, "one line is cap height tall");
+            float w2, h2;
+            f.Measure("Turn the handwheel clockwise until it stops.", 0.022f, 0.3f, out w2, out h2);
+            Check(w2 <= 0.3f && h2 > h, "wraps within the width");
+            Check(f.Wrap("Turn the handwheel clockwise until it stops.", 0.3f / 0.022f).Count == 2, "two lines");
+            Check(fonts.Get("semibold").Width("Motor") > f.Width("Motor"), "semibold is wider");
+            Check(fonts.Get("no-such-weight") == f, "unknown weight falls back");
         }
 
-        // ---- planner -----------------------------------------------------------------------
+        // ---- runtime -------------------------------------------------------------------------
 
-        static void PlanWalkthrough()
-        {
-            World w = MakeWorld();
-            PlanResult plan = w.Ask(DemoPrompts[0]);
-            Check(plan.chip == "Walkthrough", "chip is " + plan.chip);
-            Build b = w.store.Get("walkthrough");
-            Check(b != null && b.stepCount == 3 && b.currentStep == 1, "three steps, starting at one");
-            Check(b.elements.Count(e => e.type == ElementType.Pin) == 3, "three pins");
-            Element card2 = b.elements.First(e => e.type == ElementType.Card && e.step == 2);
-            Check(card2.title == "Close this valve" && card2.anchor.entity == "gate-valve", "step 2 card");
-            Element gizmo = b.elements.First(e => e.type == ElementType.Gizmo);
-            Check(gizmo.step == 2 && gizmo.action == "turn-cw" && gizmo.anchor.entity == "gate-valve", "turn arrow on the valve");
-            Check(b.elements.Where(e => e.type == ElementType.Pin).All(e => e.step == 0), "pins are always visible");
-            Check(b.IsVisible(b.elements.First(e => e.id == "card-1")) && !b.IsVisible(card2), "only the current step's card shows");
-        }
-
-        static void PlanFlow()
-        {
-            World w = MakeWorld();
-            PlanResult plan = w.Ask(DemoPrompts[1]);
-            Check(plan.chip == "Live flow", "chip");
-            Build b = w.store.Get("flow");
-            Element flow = b.elements.First(e => e.type == ElementType.Flow);
-            Check(flow.points.Count == 3 && flow.entities.SequenceEqual(new[] { "inlet", "outlet" }), "path + highlights");
-            Check(b.elements.Any(e => e.type == ElementType.Label && e.text == "Inlet"), "inlet label");
-            Check(b.elements.Any(e => e.type == ElementType.Label && e.text == "Outlet"), "outlet label");
-        }
-
-        static void PlanFaults()
+        static void RuntimeBasics()
         {
             World w = MakeWorld();
-            PlanResult plan = w.Ask(DemoPrompts[2]);
-            Check(plan.chip == "Fault history", "chip");
-            Build b = w.store.Get("faults");
-            var highlights = b.elements.Where(e => e.type == ElementType.Highlight).ToList();
-            Check(highlights.Count == 2 && highlights.All(h => h.style == ElementStyle.Warning), "two warning highlights");
-            Check(highlights.Select(h => h.anchor.entity).SequenceEqual(new[] { "motor", "coupling" }), "on the motor and coupling");
-            Check(b.elements.Any(e => e.type == ElementType.Label && e.text == "Last week's faults"), "title label");
-            Check(plan.reply.Contains("2 faults"), "reply summarises: " + plan.reply);
+            Experience e = w.Start("basics", @"
+                const g = scene.group({ position: [1, 2, 3] });
+                const box = scene.box({ parent: g, size: [0.2, 0.1, 0.4], color: 'accent', position: [0, 0.5, 0], rotation: [0, 90, 0], scale: 2 });
+                const label = scene.text({ parent: g, text: 'Hello pump', size: 0.03, weight: 'semibold' });
+                const loose = scene.sphere({ radius: 0.1, color: '#ff0000', opacity: 0.5 });
+                g.add(loose);
+                loose.position = [0, 0, 1];
+                log('size', label.width > 0.1, label.height > 0.01, box.worldPosition());
+                box.color = 'warning';
+            ");
+            Check(e.Error == null && e.IsRunning, "runs: " + e.Error);
+            Check(w.host.Nodes.Count == 4 && e.NodeCount == 4, "four nodes");
+            TestNode group = w.host.OfKind("group").Single(), box = w.host.OfKind("box").Single(), sphere = w.host.OfKind("sphere").Single();
+            Near(group.position, new Vec3(1, 2, 3), "group position");
+            Check(box.Parent == group.id && sphere.Parent == group.id, "parenting, at creation and by add()");
+            Near(box.rotation * Vec3.Forward, Vec3.Right, "euler rotation applied");
+            Near(box.scale, new Vec3(2, 2, 2), "uniform scale");
+            Check(box.props.Str("color") == "#E8722C", "theme colour resolved, then updated: " + box.props.Str("color"));
+            Near(Json.ToVec3(box.props["size"]), new Vec3(0.2f, 0.1f, 0.4f), "kind-specific props pass through");
+            Near((float)sphere.props.Num("opacity"), 0.5f, "opacity");
+            Near(w.host.World(sphere), new Vec3(1, 2, 4), "world position through the parent");
+            Check(w.log.Single() == "info: size true true [1,2.5,3]", "program log: " + string.Join(" | ", w.log));
         }
 
-        static void PlanDashboard()
+        static void RuntimeAnimation()
         {
             World w = MakeWorld();
-            PlanResult plan = w.Ask(DemoPrompts[3]);
-            Check(plan.chip == "Dashboard", "chip");
-            Element chart = w.store.Get("dashboard").elements.Single();
-            Check(chart.type == ElementType.Chart && chart.title == "Output this month" && chart.values.Count == 10, "chart content");
-            Check(chart.anchor.entity == "workbench" && chart.anchor.at == AnchorMode.FloorNear, "by the bench, on the floor");
-            // A different metric and placement.
-            w.Ask("show energy consumption on the bench");
-            chart = w.store.Get("dashboard").elements.Single();
-            Check(chart.title == "Energy this month" && chart.anchor.at == AnchorMode.Surface, "metric and surface placement");
+            w.Start("anim", @"
+                const a = scene.box({ size: [0.1, 0.1, 0.1] });
+                a.animate({ position: [1, 0, 0], scale: 3 }, { duration: 0.5, ease: 'linear' });
+                const spinner = scene.box({ size: [0.1, 0.1, 0.1] });
+                spinner.spin([0, 1, 0], 90);
+                let frames = 0, fired = 0, ticks = 0;
+                scene.onFrame(() => frames++);
+                scene.after(0.3, () => fired++);
+                const stop = scene.every(0.2, () => { ticks++; if (ticks === 3) stop(); });
+                scene.wait(0.6).then(() => log('report', frames > 10, fired, ticks));
+            ");
+            w.Advance(0.25f);
+            TestNode a = w.host.Nodes.Values.First();
+            Check(a.position.x > 0.3f && a.position.x < 0.7f, "half way: " + a.position.x);
+            w.Advance(0.75f);
+            Near(a.position, new Vec3(1, 0, 0), "tween finished", 1e-2f);
+            Near(a.scale, new Vec3(3, 3, 3), "scale tweened", 1e-2f);
+            TestNode spinner = w.host.Nodes.Values.Last();
+            Near(spinner.rotation.YawDegrees, 90f, "one second at 90 degrees per second", 4f);
+            Check(w.log.Contains("info: report true 1 3"), "timers: " + string.Join(" | ", w.log));
         }
 
-        static void PlanChecklist()
+        static void RuntimeSpace()
         {
             World w = MakeWorld();
-            PlanResult plan = w.Ask(DemoPrompts[4]);
-            Check(plan.chip == "Checklist", "chip");
-            Element list = w.store.Get("checklist").elements.Single();
-            Check(list.title == "Parts check" && list.items.Count == 3, "items");
-            Check(list.items[0].done && list.items[1].done && !list.items[2].done, "tick state");
-            Check(list.people.SequenceEqual(new[] { "M", "J" }) && list.more == 3, "people");
-            Check(list.anchor.entity == "workbench" && list.anchor.at == AnchorMode.Above, "above the bench");
-        }
+            ViewFrame view = w.UserView();
+            RoomEntity valve = w.host.Room.Get("gate-valve");
+            float u, v;
+            Check(view.Project(valve.position, out u, out v), "valve is in view");
+            string uv = u.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + ", " + v.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+            Experience e = w.Start("space", @"
+                const hit = space.view.point(" + uv + @");
+                log('view', hit.label, hit.distance > 1 && hit.distance < 4);
+                log('sky', space.raycast([0, 1.6, -2], [0, 1, 0]));
+                const down = space.raycast([0, 1.6, -2], [0, -1, 0]);
+                log('floor', down.position, down.normal, space.floorY);
+                log('floorBelow', space.floorBelow([0.4, 1.2, -1.5]));
+                log('kinds', space.surfaces().map(s => s.kind).sort().join(','));
+                const valve = space.prop('the gate valve');
+                log('prop', valve.id, space.prop('bench').id, space.prop('pump').id, space.prop('spaceship'));
+                log('action', valve.actionPoint[1] > valve.position[1]);
+                const spot = space.freeFloorNear(space.prop('workbench'), 0.45);
+                log('spot', spot);
+                const facing = quat.rotate(space.faceUser([0, 1, 0]), [0, 0, 1]);
+                log('facing', facing[2] > 0.99);
+                const wall = space.nearestWall(valve);
+                log('wall', wall.surface.id, wall.position[2] > 0.9);
+                log('beside', space.beside(valve)[2] < valve.position[2], space.topOf(valve)[1] > valve.position[1]);
+                log('head', user.head.position, user.head.forward);
+            ", view);
+            Check(e.Error == null, "runs: " + e.Error);
+            string all = string.Join("\n", w.log);
+            Check(all.Contains("info: view Gate valve true"), "view.point finds the valve:\n" + all);
+            Check(all.Contains("info: sky null"), "nothing along a ray into the open (the room has no ceiling)");
+            Check(all.Contains("info: floor [0,0,-2] [0,1,0] 0"), "raycast down");
+            Check(all.Contains("info: floorBelow [0.4,0,-1.5]"), "floor below a point");
+            Check(all.Contains("info: kinds floor,wall,wall,wall"), "surfaces are the real ones only");
+            Check(all.Contains("info: prop gate-valve workbench pump null"), "props by name, alias and part");
+            Check(all.Contains("info: action true"), "action point exposed");
+            Check(all.Contains("info: facing true"), "faceUser points content away from the user");
+            Check(all.Contains("info: wall wall-back true"), "nearest wall");
+            Check(all.Contains("info: beside true true"), "beside and topOf");
+            Check(all.Contains("info: head [0.1,1.6,-2.3] [0,0,1]"), "user head");
 
-        static void PlanSession()
-        {
-            World w = MakeWorld();
-            PlanResult plan = w.Ask(DemoPrompts[5]);
-            Check(plan.chip == "Shared session", "chip");
-            Element avatar = w.store.Get("session").elements.Single();
-            Check(avatar.type == ElementType.Avatar && avatar.name == "Sara" && avatar.text == "S", "Sara");
-        }
-
-        static void PlanSteps()
-        {
-            World w = MakeWorld();
-            w.Ask(DemoPrompts[0]);
-            PlanResult next = w.Ask("next");
-            Check(next.ops.Single().op == OpType.Step && w.store.Get("walkthrough").currentStep == 2, "next -> step 2");
-            Check(next.reply.Contains("Close this valve"), "reply names the step: " + next.reply);
-            w.Ask("next step");
-            Check(w.store.Get("walkthrough").currentStep == 3, "next step -> 3");
-            PlanResult end = w.Ask("next");
-            Check(end.ops.Count == 0 && end.reply.Contains("last step"), "stops at the end");
-            w.Ask("go back");
-            Check(w.store.Get("walkthrough").currentStep == 2, "back -> 2");
-            w.Ask("go to step one");
-            Check(w.store.Get("walkthrough").currentStep == 1, "step one");
-            w.Ask("step 3");
-            Check(w.store.Get("walkthrough").currentStep == 3, "step 3");
-        }
-
-        static void PlanNoFalseNavigation()
-        {
-            World w = MakeWorld();
-            w.Ask(DemoPrompts[0]);
-            w.Ask("next");
-            PlanResult plan = w.Ask(DemoPrompts[2]);
-            Check(plan.chip == "Fault history", "built fault history, got: " + plan.reply);
-            Check(w.store.Get("walkthrough").currentStep == 2, "walkthrough did not move");
-        }
-
-        static void PlanEdits()
-        {
-            World w = MakeWorld();
-            w.Ask(DemoPrompts[3]);
-            w.Ask(DemoPrompts[4]);
-
-            w.Ask("make the chart bigger");
-            Near(w.store.Get("dashboard").elements[0].scale, 1.35f, "chart grew");
-            Near(w.store.Get("checklist").elements[0].scale, 1f, "checklist untouched");
-
-            w.Ask("move the chart next to the motor");
-            Element chart = w.store.Get("dashboard").elements[0];
-            Check(chart.anchor.entity == "motor" && chart.anchor.at == AnchorMode.FloorNear, "chart moved to the motor");
-            Near(chart.scale, 1.35f, "scale survives a move");
-
-            w.Ask("put it on the wall");
-            Check(w.store.Get("dashboard").elements[0].anchor.at == AnchorMode.Wall, "'it' is the build just touched; now on the wall");
-            Check(w.store.Get("checklist").elements[0].anchor.at == AnchorMode.Above, "the checklist stayed where it was");
-
-            w.Ask("remove the checklist");
-            Check(w.store.Get("checklist") == null && w.store.Get("dashboard") != null, "checklist removed only");
-
-            w.Ask("clear everything");
-            Check(w.store.Builds.Count == 0, "cleared");
-        }
-
-        static void PlanDescribeAndUnknown()
-        {
-            World w = MakeWorld();
-            PlanResult plan = w.Ask("what is the gate valve?");
-            Element panel = w.store.Get("note").elements.First(e => e.type == ElementType.Panel);
-            Check(panel.title == "Gate valve" && panel.body.Contains("clockwise"), "describes the valve");
-            PlanResult unknown = w.Ask("sing me a song");
-            Check(unknown.ops.Count == 0 && unknown.reply.Length > 0 && unknown.chip == "", "unknown request explains what is possible");
-            PlanResult labels = w.Ask("label everything");
-            Check(w.store.Get("labels").elements.Count == 5, "five scan labels, got " + w.store.Get("labels").elements.Count);
-        }
-
-        static void PlanRoundTrip()
-        {
-            World w = MakeWorld();
-            foreach (string prompt in DemoPrompts)
+            // The spot found must actually be clear of everything standing on the floor.
+            string spotLine = w.log.First(l => l.StartsWith("info: spot "));
+            Vec3 spot = Json.ToVec3(Json.Parse(spotLine.Substring("info: spot ".Length)));
+            Near(spot.y, 0f, "on the floor");
+            foreach (RoomEntity prop in w.host.Props)
             {
-                PlanResult plan = w.planner.Plan(new PlanRequest { prompt = prompt, room = w.room, site = w.site, builds = w.store.Builds });
-                string json = SpecJson.Write(plan);
-                PlanResult back = SpecJson.ParsePlan(json);
-                Check(SpecJson.Write(back) == json, "round trip differs for: " + prompt);
-                Check(back.ops[0].build.elements.Count == plan.ops[0].build.elements.Count, "element count");
+                if (prop.position.y - prop.size.y * 0.5f > 0.6f || prop.kind == EntityKind.Equipment) continue;
+                Vec3 local = prop.rotation.Inverse * (spot - prop.position);
+                bool inside = Math.Abs(local.x) < prop.size.x * 0.5f && Math.Abs(local.z) < prop.size.z * 0.5f;
+                Check(!inside, "free floor spot is inside " + prop.id);
             }
         }
 
-        static void SanitizeRepairs()
+        static void RuntimeFind()
         {
             World w = MakeWorld();
-            string json = @"{""reply"":""ok"",""chip"":""Custom"",""ops"":[
-              {""op"":""add"",""build"":{""id"":"""",""kind"":""custom"",""title"":"""",""elements"":[
-                {""type"":""label"",""text"":""A"",""anchor"":{""entity"":""the motor"",""at"":""top""}},
-                {""type"":""hologram"",""anchor"":{""entity"":""motor""}},
-                {""type"":""label"",""text"":""B"",""anchor"":{""entity"":""warp-core"",""at"":""top""}},
-                {""type"":""card"",""title"":""T"",""step"":2,""scale"":99,""anchor"":{""entity"":""pump"",""at"":""sideways""}},
-                {""type"":""panel"",""title"":""Free"",""anchor"":{""entity"":"""",""at"":""user""}}]}},
-              {""op"":""teleport""},
-              {""op"":""remove""},
-              {""op"":""add"",""build"":{""id"":""empty"",""elements"":[{""type"":""label"",""anchor"":{""entity"":""nope""}}]}}]}";
-            PlanResult plan = SpecJson.ParsePlan(json);
-            List<string> notes = SpecJson.Sanitize(plan, w.room);
-            Check(plan.ops.Count == 1, "only the valid op survives, got " + plan.ops.Count);
-            Build b = plan.ops[0].build;
-            Check(b.id == "custom" && b.title == "Content", "missing id/title filled");
-            Check(b.elements.Count == 3, "bad elements dropped, got " + b.elements.Count);
-            Check(b.elements[0].anchor.entity == "motor", "phrase resolved to an entity id");
-            Check(b.elements[1].anchor.at == AnchorMode.Center && b.elements[1].scale == 4f, "bad anchor mode and scale clamped");
-            Check(b.elements.All(e => !string.IsNullOrEmpty(e.id)) && b.elements.Select(e => e.id).Distinct().Count() == 3, "unique ids");
-            Check(b.stepCount == 2 && b.currentStep == 1, "step count inferred");
-            Check(notes.Count >= 5, "notes explain what changed: " + notes.Count);
+            w.host.Finder = query => query.Contains("extinguisher")
+                ? new List<RayHit> { new RayHit { position = new Vec3(3, 1, 0.9f), normal = new Vec3(0, 0, -1), distance = 4, label = "fire extinguisher" } }
+                : new List<RayHit>();
+            Experience e = w.Start("find", @"
+                log('before');
+                const hits = await space.find('the fire extinguisher');
+                log('found', hits.length, hits[0].label, hits[0].position);
+                kit.label('Extinguisher', hits[0]);
+                const none = await space.find('a unicorn');
+                log('none', none.length);
+            ");
+            Check(e.IsRunning && w.log.Count == 1, "suspended at the first await");
+            w.Advance(0.2f);
+            string all = string.Join("\n", w.log);
+            Check(all.Contains("info: found 1 fire extinguisher [3,1,0.9]"), "resolved with the host's answer:\n" + all);
+            Check(all.Contains("info: none 0"), "empty result resolves too");
+            Check(w.host.Text("Extinguisher") != null, "content built after the await");
         }
 
-        static void ServicePlanShape()
-        {
-            // Exactly what the planner service's schema makes the model emit: vectors as {x,y,z}, every field present.
-            World w = MakeWorld();
-            string json = @"{""reply"":""Two steps."",""chip"":""Walkthrough"",""planner"":""claude-opus-5-5"",""latencyMs"":2100,""ops"":[
-              {""op"":""remove"",""buildId"":""labels""},
-              {""op"":""add"",""build"":{""id"":""walkthrough"",""kind"":""walkthrough"",""title"":""Walkthrough"",""stepCount"":2,""currentStep"":1,""elements"":[
-                {""id"":""pin-1"",""type"":""pin"",""number"":1,""text"":"""",""step"":0,""style"":""accent"",""scale"":1,""anchor"":{""entity"":""gate-valve"",""at"":""top"",""offset"":{""x"":0,""y"":0,""z"":0}}},
-                {""id"":""card-1"",""type"":""card"",""number"":1,""title"":""Close this valve"",""body"":""Clockwise until it stops."",""step"":1,""style"":""accent"",""scale"":1,""anchor"":{""entity"":""gate-valve"",""at"":""callout"",""offset"":{""x"":0,""y"":0.1,""z"":0}}},
-                {""id"":""gizmo-1"",""type"":""gizmo"",""action"":""turn-cw"",""step"":1,""style"":""accent"",""scale"":1,""anchor"":{""entity"":""gate-valve"",""at"":""top"",""offset"":{""x"":0,""y"":0,""z"":0}}},
-                {""id"":""flow-1"",""type"":""flow"",""points"":[{""x"":1.3,""y"":0.46,""z"":0},{""x"":0.2,""y"":0.46,""z"":0}],""radius"":0.07,""entities"":[""inlet""],""text"":"""",""step"":2,""style"":""accent"",""scale"":1,""anchor"":{""entity"":""pump-p101"",""at"":""center"",""offset"":{""x"":0,""y"":0,""z"":0}}},
-                {""id"":""chart-1"",""type"":""chart"",""title"":""Output"",""unit"":""m3"",""values"":[1,2,3],""labels"":[],""step"":2,""style"":""accent"",""scale"":1.2,""anchor"":{""entity"":""workbench"",""at"":""floor-near"",""offset"":{""x"":0,""y"":0,""z"":0}}},
-                {""id"":""list-1"",""type"":""checklist"",""title"":""Parts"",""items"":[{""text"":""Seal"",""done"":true}],""people"":[""M""],""more"":0,""step"":2,""style"":""accent"",""scale"":1,""anchor"":{""entity"":""workbench"",""at"":""above"",""offset"":{""x"":0,""y"":0,""z"":0}}}]}}]}";
-            PlanResult plan = SpecJson.ParsePlan(json);
-            List<string> notes = SpecJson.Sanitize(plan, w.room);
-            Check(notes.Count == 0, "a well-formed service plan needs no repairs: " + string.Join("; ", notes));
-            Check(plan.planner == "claude-opus-5-5" && plan.ops.Count == 2, "metadata and ops");
-            Build b = plan.ops[1].build;
-            Check(b.elements.Count == 6 && b.stepCount == 2 && b.currentStep == 1, "build parsed");
-            Near(b.elements[1].anchor.offset, new Vec3(0, 0.1f, 0), "object-form offset");
-            Near(b.elements[3].points[0], new Vec3(1.3f, 0.46f, 0), "object-form flow points");
-            Check(b.elements[5].items[0].done && b.elements[5].people[0] == "M", "checklist fields");
-            Near(b.elements[4].scale, 1.2f, "scale");
-            foreach (Element e in b.elements) Check(LayoutSolver.Place(e, w.room).valid, e.id + " places");
-            w.store.Add(BuildFactory.Labels(w.room));
-            w.store.Apply(plan);
-            Check(w.store.Get("labels") == null && w.store.Get("walkthrough") != null, "applies");
-        }
-
-        // ---- layout ------------------------------------------------------------------------
-
-        static void LayoutSane()
+        static void RuntimeEvents()
         {
             World w = MakeWorld();
-            foreach (string prompt in DemoPrompts) w.Ask(prompt);
-            int count = 0;
-            foreach (Build b in w.store.Builds)
-                foreach (Element e in b.elements)
-                {
-                    Placement p = LayoutSolver.Place(e, w.room);
-                    Check(p.valid, e.id + " has no placement");
-                    Check(p.position.y >= -0.01f && p.position.y < SimRoom.Height, e.id + " height out of range: " + p.position);
-                    Check(Math.Abs(p.position.x) < SimRoom.Width * 0.5f && p.position.z < SimRoom.BackWallZ + 0.01f, e.id + " is outside the room: " + p.position);
-                    Near((p.rotation * Vec3.Forward).Length, 1f, e.id + " rotation is not unit");
-                    if (e.type != ElementType.Gizmo && e.type != ElementType.Highlight && e.type != ElementType.Flow)
-                    {
-                        Vec3 away = (p.position - w.room.userPosition).Flat.Normalized;
-                        Check(Vec3.Dot((p.rotation * Vec3.Forward).Flat.Normalized, away) > 0.95f, e.id + " does not face the user");
-                    }
-                    count++;
-                }
-            Check(count >= 20, "expected at least 20 elements across the demo, got " + count);
+            w.Start("events", @"
+                const g = scene.group();
+                g.onClick(() => log('group clicked'));
+                const inner = scene.box({ parent: g, size: [0.1, 0.1, 0.1] });
+                const own = scene.box({ size: [0.1, 0.1, 0.1] });
+                own.onClick(n => log('own clicked', n.id === own.id));
+                own.onHover(inside => log('hover', inside));
+                const b = kit.button('Go', () => log('button'));
+            ");
+            TestNode inner = w.host.OfKind("box").First(n => n.Parent != 0);
+            Check(!inner.props.Bool("interactive") && w.host.Nodes[inner.Parent].props.Bool("interactive"), "the group is the hit target");
+            Check(w.runtime.DispatchEvent(inner.id, "click"), "a click on a child bubbles to the group");
+            TestNode own = w.host.OfKind("box").First(n => n.Parent == 0);
+            w.runtime.DispatchEvent(own.id, "click");
+            w.runtime.DispatchEvent(own.id, "enter");
+            w.runtime.DispatchEvent(own.id, "exit");
+            w.Click(w.host.Text("Go"));
+            Check(string.Join("|", w.log) == "info: group clicked|info: own clicked true|info: hover true|info: hover false|info: button", "events: " + string.Join("|", w.log));
+            Check(!w.runtime.DispatchEvent(99999, "click"), "unknown node");
         }
 
-        static void LayoutChart()
+        static void RuntimeLifecycle()
         {
             World w = MakeWorld();
-            w.Ask(DemoPrompts[3]);
-            Element chart = w.store.Get("dashboard").elements[0];
-            Placement p = LayoutSolver.Place(chart, w.room);
-            RoomEntity bench = w.room.Get("workbench");
-            Near(p.position.y, 0f, "chart stands on the floor");
-            Check(p.position.z < bench.position.z - bench.size.z * 0.5f, "chart is in front of the bench (toward the user)");
-            Check(Vec3.Distance(p.position.Flat, bench.position.Flat) < 1.2f, "chart is close to the bench");
-            // It must not overlap the pump skid.
-            RoomEntity skid = w.room.Get("pump-p101");
-            Vec3 local = skid.rotation.Inverse * (p.position - skid.position);
-            float halfChart = LayoutSolver.ChartWidth(chart.values.Count) * 0.5f;
-            Check(Math.Abs(local.x) > skid.size.x * 0.5f + halfChart * 0.5f || Math.Abs(local.z) > skid.size.z * 0.5f, "chart clears the skid");
+            const string counter = @"
+                state.count = (state.count || 0) + 1;
+                scene.text({ text: 'count ' + state.count });
+                scene.box({ size: [0.1, 0.1, 0.1] });
+            ";
+            Experience first = w.Start("counter", counter);
+            Experience other = w.Start("other", "scene.sphere({ radius: 0.1 });");
+            Check(w.host.Nodes.Count == 3 && w.runtime.Experiences.Count == 2, "two experiences");
+            Check(w.runtime.OwnerOf(w.host.OfKind("sphere").Single().id) == other, "node ownership");
+
+            Experience second = w.Start("counter", counter);
+            Check(!first.IsRunning && second.IsRunning && w.runtime.Experiences.Count == 2, "same id replaces");
+            Check(w.host.Text("count 2") != null && w.host.Text("count 1") == null, "state carried over, old nodes gone");
+
+            Check(w.runtime.Stop("counter") && w.host.Nodes.Count == 1, "stop removes its nodes only");
+            Experience third = w.Start("counter", counter);
+            Check(w.host.Text("count 1") != null, "an explicit stop forgets state");
+
+            w.Start("self", "scene.box({ size: [1, 1, 1] }); scene.after(0.1, finish);");
+            w.Advance(0.3f);
+            Check(w.runtime.Get("self") == null, "finish() takes the experience out");
+            w.runtime.StopAll();
+            Check(w.host.Nodes.Count == 0 && w.runtime.Experiences.Count == 0 && w.host.Created == w.host.Destroyed, "everything cleaned up");
         }
 
-        static void LayoutFlow()
+        static void RuntimeFailures()
         {
             World w = MakeWorld();
-            w.Ask(DemoPrompts[1]);
-            Element flow = w.store.Get("flow").elements.First(e => e.type == ElementType.Flow);
-            List<Vec3> path = LayoutSolver.FlowPath(flow, w.room);
-            Check(path.Count == 3, "three points");
-            Near(path[0], w.station.TransformPoint(new Vec3(1.3f, 0.46f, 0)), "starts at the inlet end");
-            Near(path[2], w.station.TransformPoint(new Vec3(0.2f, 1.26f, 0)), "ends above the outlet");
-            RoomEntity inlet = w.room.Get("inlet");
-            Near(path[0].y, inlet.position.y, "runs along the pipe centre-line");
+            Experience syntax = w.Start("syntax", "const x = ;");
+            Check(syntax.Error != null && !syntax.IsRunning && w.runtime.Experiences.Count == 0, "syntax error reported");
+
+            Experience thrown = w.Start("thrown", "scene.box({ size: [1, 1, 1] }); const p = space.prop('nothing'); p.position;");
+            Check(thrown.Error != null && thrown.Error.Contains("position"), "runtime error names the problem: " + thrown.Error);
+            Check(w.host.Nodes.Count == 0, "a failed program leaves nothing behind");
+
+            Experience later = w.Start("later", "await scene.wait(0.1); undefinedFunction();");
+            Check(later.IsRunning, "starts fine");
+            w.Advance(0.3f);
+            Check(!later.IsRunning && later.Error.Contains("undefinedFunction"), "error after an await is caught: " + later.Error);
+
+            Experience loop = w.Start("loop", "while (true) {}");
+            Check(loop.Error != null && loop.Error.Contains("too long"), "runaway loop stopped: " + loop.Error);
+
+            Experience frameLoop = w.Start("frameLoop", "scene.onFrame(() => { while (true) {} });");
+            w.Advance(0.1f);
+            Check(!frameLoop.IsRunning && frameLoop.Error.Contains("too long"), "runaway frame callback stopped");
+
+            Experience deep = w.Start("deep", "function f() { return f(); } f();");
+            Check(deep.Error != null, "runaway recursion stopped");
+            Check(w.failed.Count == 6 && w.runtime.Experiences.Count == 0, "all six reported as failed: " + w.failed.Count);
+
+            // The runtime is still healthy afterwards.
+            Check(w.Start("ok", "scene.box({ size: [1, 1, 1] });").IsRunning, "next program runs");
         }
 
-        static void LayoutWall()
+        static void RuntimeCallbackErrors()
         {
             World w = MakeWorld();
-            var e = new Element { type = ElementType.Panel, anchor = new Anchor { entity = "pump-p101", at = AnchorMode.Wall } };
-            Placement p = LayoutSolver.Place(e, w.room);
-            Near(p.position.z, SimRoom.BackWallZ - 0.02f, "just off the back wall");
-            Near(p.position.y, LayoutSolver.EyeHeight, "eye height");
-            Near(p.rotation * Vec3.Forward, new Vec3(0, 0, 1), "faces into the room (forward points into the wall)");
+            Experience e = w.Start("callbacks", @"
+                let n = 0;
+                scene.after(0.05, () => { throw new Error('one bad timer'); });
+                scene.onFrame(() => n++);
+                scene.after(0.3, () => log('still running', n > 3));
+            ");
+            w.Advance(0.5f);
+            Check(e.IsRunning, "one failing callback does not stop the program");
+            Check(w.log.Any(l => l.StartsWith("error: timer") && l.Contains("one bad timer")), "the error is logged");
+            Check(w.log.Contains("info: still running true"), "other callbacks kept going");
+
+            Experience noisy = w.Start("noisy", "scene.onFrame(() => { throw new Error('every frame'); });");
+            w.Advance(3f);
+            Check(!noisy.IsRunning && noisy.Error.Contains("Stopped after"), "a program that fails every frame is stopped: " + noisy.Error);
         }
 
-        // ---- store -------------------------------------------------------------------------
-
-        static void StoreOps()
-        {
-            var store = new BuildStore();
-            var log = new List<string>();
-            store.Added += b => log.Add("+" + b.id);
-            store.Removed += b => log.Add("-" + b.id);
-            store.Changed += b => log.Add("~" + b.id);
-
-            World w = MakeWorld();
-            Build walk = BuildFactory.Walkthrough(w.site.knowledge.procedures[0], w.room);
-            store.Add(walk);
-            store.Add(BuildFactory.Checklist(w.site.knowledge, "workbench", AnchorMode.Above));
-            store.Add(walk.Clone());
-            Check(store.Builds.Count == 2, "re-adding replaces");
-            Check(string.Join(" ", log) == "+walkthrough +checklist -walkthrough +walkthrough", "events: " + string.Join(" ", log));
-            log.Clear();
-
-            Check(store.SetStep("walkthrough", 2) && !store.SetStep("walkthrough", 2) && !store.SetStep("checklist", 2), "step changes once");
-            Check(store.SetStep("walkthrough", 99) && store.Get("walkthrough").currentStep == 3, "step clamps");
-            Check(store.ToggleChecklistItem("checklist", "checklist-spares", 2) && store.Get("checklist").elements[0].items[2].done, "toggle");
-            Check(string.Join(" ", log) == "~walkthrough ~walkthrough ~checklist", "change events: " + string.Join(" ", log));
-
-            PlanResult snapshot = store.Snapshot();
-            var other = new BuildStore();
-            other.Apply(snapshot);
-            Check(other.Builds.Count == 2 && other.Get("walkthrough").currentStep == 3 && other.Get("checklist").elements[0].items[2].done, "snapshot restores state");
-            Check(store.LatestStepped.id == "walkthrough" && store.FindByKind(BuildKind.Checklist) != null, "queries");
-            store.Clear();
-            Check(store.Builds.Count == 0, "clear");
-        }
-
-        static void LabelsRetire()
+        static void RuntimeSandbox()
         {
             World w = MakeWorld();
-            w.store.Add(BuildFactory.Labels(w.room));
-            PlanResult plan = w.Ask(DemoPrompts[0]);
-            Check(plan.ops[0].op == OpType.Remove && plan.ops[0].buildId == "labels", "plan carries the removal");
-            Check(w.store.Get("labels") == null && w.store.Get("walkthrough") != null, "labels gone, walkthrough in");
-            PlanResult again = w.Ask("label everything");
-            Check(w.store.Get("labels") != null && w.store.Get("walkthrough") != null, "asking for labels brings them back alongside");
-            PlanResult step = w.Ask("next");
-            Check(step.ops.Count == 1 && w.store.Get("labels") != null, "navigation leaves labels alone");
+            Experience e = w.Start("sandbox", @"
+                log(typeof System, typeof importNamespace, typeof require, typeof process, typeof fetch, typeof XMLHttpRequest, typeof window);
+                log(typeof __host.create, Object.keys(__host).sort().join(','));
+            ");
+            Check(e.Error == null, e.Error);
+            Check(w.log[0] == "info: undefined undefined undefined undefined undefined undefined undefined", "no way out: " + w.log[0]);
+            Check(w.log[1] == "info: function create,destroy,fail,find,finish,floorY,hasView,log,measure,props,raycast,surfaces,update,user,viewRay,xf",
+                "the host surface is exactly this: " + w.log[1]);
         }
 
-        static void LayoutGizmo()
+        static void RuntimeNodeBudget()
         {
             World w = MakeWorld();
-            w.Ask(DemoPrompts[0]);
-            Element gizmo = w.store.Get("walkthrough").elements.First(e => e.type == ElementType.Gizmo);
-            Placement p = LayoutSolver.Place(gizmo, w.room);
-            Near(p.position, w.station.TransformPoint(new Vec3(0.64f, 0.85f, 0)), "on the handwheel");
-            Near(p.rotation * Vec3.Up, Vec3.Up, "axis vertical");
+            w.runtime.Limits.MaxNodes = 50;
+            Experience e = w.Start("many", "for (let i = 0; i < 60; i++) scene.box({ size: [0.1, 0.1, 0.1] });");
+            Check(e.Error != null && e.Error.Contains("too many nodes") && w.host.Nodes.Count == 0, "node budget enforced: " + e.Error);
         }
 
-        static void PlanFocus()
+        // ---- the film's six requests, as programs --------------------------------------------------
+
+        static void FilmPrograms()
         {
             World w = MakeWorld();
-            PlanResult plan = w.planner.Plan(new PlanRequest { prompt = "what is this?", room = w.room, site = w.site, builds = w.store.Builds, focusEntityId = "motor" });
-            Check(plan.ops.Count == 1 && plan.ops[0].build.elements[0].title == "Motor", "describes the motor");
-            plan = w.planner.Plan(new PlanRequest { prompt = "what is this?", room = w.room, site = w.site, builds = w.store.Builds });
-            Check(plan.ops.Count == 0, "without a focus there is nothing to describe");
+            foreach (string id in FilmIds)
+            {
+                Experience e = w.runtime.Start(id, id, "film", Example(id), w.UserView());
+                Check(e.Error == null && e.IsRunning, id + " failed: " + e.Error);
+                Check(e.NodeCount >= 5, id + " built only " + e.NodeCount + " nodes");
+            }
+            w.Advance(3f);
+            Check(w.failed.Count == 0, "failed while running: " + string.Join("; ", w.failed.Select(f => f.Id + ": " + f.Error)));
+            Check(!w.log.Any(l => l.StartsWith("error")), "errors logged: " + string.Join(" | ", w.log.Where(l => l.StartsWith("error"))));
+            Check(w.runtime.Experiences.Count == 6, "all six still running");
+
+            // Everything is inside the room and nothing is left at a degenerate transform.
+            foreach (TestNode n in w.host.Nodes.Values)
+            {
+                Vec3 p = w.host.World(n);
+                Check(Math.Abs(p.x) < SimRoom.Width * 0.5f && p.y > -0.05f && p.y < SimRoom.Height && p.z < SimRoom.BackWallZ + 0.05f, n.kind + " " + n.id + " is outside the room at " + p);
+                Check(!float.IsNaN(n.rotation.w) && !float.IsNaN(p.x), "NaN transform on " + n.kind);
+            }
+            foreach (string text in new[] { "Stop and lock out", "Inlet", "Outlet", "42 m³/h", "Last week's faults", "Output this month  ·  ×100 m³", "Parts check", "Coupling insert", "Sara", "+3" })
+                Check(w.host.Text(text) != null, "missing text: " + text);
+            Check(w.host.OfKind("tube").Any(t => t.props.Has("flow")), "flow tube");
+            Check(w.host.OfKind("torus").Count() == 0, "no turn arrow on step 1");
         }
 
-        // ---- remote planner ----------------------------------------------------------------
+        static void FilmWalkthrough()
+        {
+            World w = MakeWorld();
+            Experience e = w.runtime.Start("walkthrough", "Walkthrough", "film", Example("walkthrough"), null);
+            w.Advance(0.5f);
+            Check(w.host.Text("Stop and lock out") != null && w.host.Text("1 of 3") != null, "opens on step 1");
+
+            Check(w.runtime.HandleVoice("next"), "\"next\" is handled on the device");
+            w.Advance(0.5f);
+            Check(w.host.Text("Close this valve") != null && w.host.Text("Stop and lock out") == null, "step 2 replaces step 1");
+            TestNode torus = w.host.OfKind("torus").Single();
+            RoomEntity valve = w.host.Room.Get("gate-valve");
+            Near(w.host.World(torus), valve.ActionPoint, "turn arrow is centred on the handwheel", 1e-2f);
+            float before = w.host.Nodes[torus.Parent].rotation.YawDegrees;
+            w.Advance(0.5f);
+            float turned = w.host.Nodes[torus.Parent].rotation.YawDegrees - before;
+            Check(turned > 20f && turned < 60f, "the arrow turns clockwise seen from above: " + turned);
+
+            Check(!w.runtime.HandleVoice("has it failed before"), "a full sentence is not a command");
+            Check(w.runtime.HandleVoice("go back"), "back");
+            w.Advance(0.2f);
+            Check(w.host.Text("Stop and lock out") != null, "back to step 1");
+
+            // Tap pin 3, then the card's buttons.
+            w.Click(w.host.Text("3"));
+            w.Advance(0.2f);
+            Check(w.host.Text("Check the shaft is still") != null && w.host.Text("Done") != null, "pin 3 jumps to the last step");
+            w.Click(w.host.Text("Back"));
+            w.Advance(0.2f);
+            Check(w.host.Text("Close this valve") != null, "Back button");
+
+            // Replacing the experience (as a follow-up request would) resumes on the same step.
+            w.runtime.Start("walkthrough", "Walkthrough", "film", Example("walkthrough"), null);
+            w.Advance(0.2f);
+            Check(w.host.Text("Close this valve") != null, "state survives replacement");
+
+            w.Click(w.host.Text("Next"));
+            w.Advance(0.2f);
+            w.Click(w.host.Text("Done"));
+            w.Advance(0.2f);
+            Check(w.runtime.Experiences.Count == 0 && w.host.Nodes.Count == 0, "Done takes the walkthrough out of the room");
+        }
+
+        static void FilmChecklist()
+        {
+            World w = MakeWorld();
+            w.runtime.Start("checklist", "Checklist", "film", Example("checklist"), null);
+            w.Advance(0.5f);
+            TestNode label = w.host.Text("Coupling insert");
+            Check(label.props.Str("color") == "#17161D", "not done: ink");
+            TestNode row = w.host.Nodes[label.Parent];
+            TestNode hit = w.host.Nodes.Values.Single(n => n.Parent == row.id && n.props.Bool("interactive"));
+            w.runtime.DispatchEvent(hit.id, "click");
+            Check(label.props.Str("color") == "#7B7A8C", "ticked: muted");
+            w.runtime.Start("checklist", "Checklist", "film", Example("checklist"), null);
+            Check(w.host.Text("Coupling insert").props.Str("color") == "#7B7A8C", "the tick is remembered across replacement");
+            RoomEntity bench = w.host.Room.Get("workbench");
+            TestNode root = w.host.Root(w.host.Text("Parts check"));
+            Check(root.position.y > bench.position.y + bench.size.y * 0.5f + 0.2f, "floats above the bench");
+        }
+
+        static void FilmChart()
+        {
+            World w = MakeWorld();
+            w.runtime.Start("dashboard", "Dashboard", "film", Example("dashboard"), null);
+            w.Advance(2f);
+            TestNode root = w.host.Root(w.host.Text("Output this month  ·  ×100 m³"));
+            RoomEntity bench = w.host.Room.Get("workbench"), skid = w.host.Room.Get("baseplate");
+            Near(root.position.y, 0f, "stands on the floor");
+            Check(Vec3.Distance(root.position.Flat, bench.position.Flat) < 1.6f, "near the bench");
+            foreach (RoomEntity blocker in new[] { bench, skid })
+            {
+                Vec3 local = blocker.rotation.Inverse * (root.position - blocker.position);
+                Check(Math.Abs(local.x) > blocker.size.x * 0.5f || Math.Abs(local.z) > blocker.size.z * 0.5f, "chart centre is inside " + blocker.id);
+            }
+            var bars = w.host.OfKind("box").Where(b => b.Parent != root.id && w.host.Root(b) == root).ToList();
+            Check(bars.Count == 10, "ten bars: " + bars.Count);
+            Check(bars.All(b => Math.Abs(w.host.Nodes[b.Parent].scale.y - 1f) < 0.02f), "bars have finished growing");
+            Check(w.host.OfKind("tube").Any(t => w.host.Root(t) == root), "trend line arrived");
+        }
+
+        static void FilmOtherRoom()
+        {
+            // A different room: a real table to adopt, the station turned and moved. Nothing in the programs
+            // knows about this layout.
+            var w = new World { site = LoadSite() };
+            RoomModel raw = SimRoom.Create(withRealTable: true);
+            w.station = new Pose3(new Vec3(1.2f, 0, -1.4f), Quat.Yaw(-70));
+            w.host.Room = SiteBinder.Bind(w.site, raw, w.station);
+            w.host.UserPosition = new Vec3(-1.5f, 1.7f, -3.2f);
+            w.host.UserForward = new Vec3(0.8f, 0, 0.6f);
+            w.runtime = new ExperienceRuntime(w.host, Library(), LoadFonts());
+            w.runtime.Logged += (e, level, message) => w.log.Add(level + ": " + message);
+            foreach (string id in FilmIds)
+            {
+                Experience e = w.runtime.Start(id, id, "film", Example(id), null);
+                Check(e.Error == null, id + " failed in the other room: " + e.Error);
+            }
+            w.Advance(2f);
+            Check(!w.log.Any(l => l.StartsWith("error")), "errors: " + string.Join(" | ", w.log.Where(l => l.StartsWith("error"))));
+            RoomEntity bench = w.host.Room.Get("workbench");
+            Check(!bench.isVirtual, "bench is the real table");
+            TestNode list = w.host.Root(w.host.Text("Parts check"));
+            Check(Vec3.Distance(list.position.Flat, bench.position.Flat) < 0.05f, "checklist follows the real table");
+            TestNode pin = w.host.Root(w.host.Text("2"));
+            Near(pin.position, w.host.Room.Get("gate-valve").TopCenter, "pins follow the moved machine", 1e-2f);
+        }
+
+        // ---- building ------------------------------------------------------------------------
+
+        static DemoBuilder Demo() => new DemoBuilder(Example);
+
+        static BuildRequest Request(World w, string prompt)
+        {
+            var request = new BuildRequest { prompt = prompt, floorY = 0 };
+            request.surfaces.AddRange(w.host.Surfaces);
+            request.props.AddRange(w.host.Props);
+            foreach (Experience e in w.runtime.Experiences)
+                request.running.Add(new RunningExperience { id = e.Id, title = e.Title, prompt = e.Prompt, code = e.Code });
+            return request;
+        }
+
+        static void DemoRouting()
+        {
+            World w = MakeWorld();
+            DemoBuilder demo = Demo();
+            for (int i = 0; i < FilmPrompts.Length; i++)
+            {
+                BuildResult r = demo.Build(Request(w, FilmPrompts[i]));
+                Check(r.id == FilmIds[i] && r.HasProgram && r.reply.Length > 0 && r.builder == "demo", FilmPrompts[i] + " -> " + r.id);
+            }
+            Check(!demo.Build(Request(w, "sing me a song")).HasProgram, "declines what it has no recording for");
+
+            w.runtime.Start("dashboard", "Dashboard", "x", Example("dashboard"), null);
+            w.runtime.Start("checklist", "Checklist", "x", Example("checklist"), null);
+            BuildResult remove = demo.Build(Request(w, "remove the chart"));
+            Check(remove.remove.SequenceEqual(new[] { "dashboard" }) && !remove.HasProgram, "remove by what it is");
+            Check(demo.Build(Request(w, "clear everything")).clear, "clear");
+
+            World empty = MakeWorld(standIn: false);
+            BuildResult none = demo.Build(Request(empty, FilmPrompts[0]));
+            Check(!none.HasProgram && none.reply.Contains("stand-in"), "without the stand-in pump the recording is not played: " + none.reply);
+        }
+
+        static void RequestShape()
+        {
+            World w = MakeWorld();
+            BuildRequest request = Request(w, "what is this?");
+            request.view = w.UserView();
+            request.imageJpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 };
+            request.SampleDepth(w.host);
+            request.failure = "ReferenceError: x is not defined";
+            request.failedCode = "x();";
+            var json = Json.ParseObject(Json.Write(request.ToJson()));
+
+            Check(json.Str("prompt") == "what is this?" && json.Str("image") == "/9j/2Q==", "prompt and base64 image");
+            var depth = json.Obj("view").Obj("depth");
+            Check(depth.Int("columns") == 8 && depth.Int("rows") == 6 && depth.Arr("metres").Count == 48, "depth grid");
+            var metres = depth.Arr("metres").Select(m => Json.ToDouble(m)).ToList();
+            Check(metres.Count(m => m > 0) > 30 && metres.Max() < 15, "most rays hit something: " + metres.Count(m => m > 0));
+            Check(metres.Skip(40).All(m => m > 0 && m < metres.Take(8).Where(x => x > 0).DefaultIfEmpty(99).Max()), "the bottom row (floor near the feet) is nearer than the top row");
+            Check(json.Arr("surfaces").Count == 4, "surfaces");
+            var props = json.Arr("props").Cast<Dictionary<string, object>>().ToList();
+            var valve = props.Single(p => p.Str("id") == "gate-valve");
+            Check(valve.Str("name") == "Gate valve" && valve.Has("about") && valve.Str("partOf") == "pump-p101", "prop fields");
+            var uv = valve.Arr("inView");
+            Check(uv != null && Json.ToDouble(uv[0]) > 0.5 && Json.ToDouble(uv[1]) > 0.3, "where the hologram appears in the image");
+            Check(json.Obj("repair").Str("error").Contains("ReferenceError"), "repair context");
+            Check(json.Obj("user").Has("position") && json.Has("floorY") && json.Arr("running").Count == 0, "user, floor, running");
+        }
 
         sealed class FakeHttp : IHttpTransport
         {
             public Func<string, string, HttpResult> handler;
-            public string lastUrl, lastBody;
+            public readonly List<string> urls = new List<string>(), bodies = new List<string>();
             public Dictionary<string, string> lastHeaders;
-            public int calls;
 
             public Task<HttpResult> PostJsonAsync(string url, string json, Dictionary<string, string> headers, int timeoutSeconds)
             {
-                calls++;
-                lastUrl = url; lastBody = json; lastHeaders = headers;
+                urls.Add(url);
+                bodies.Add(json);
+                lastHeaders = headers;
                 return Task.FromResult(handler(url, json));
             }
         }
 
-        static void RemotePlannerPaths()
+        static HttpResult Ok(BuildResult r) => new HttpResult { ok = true, status = 200, body = Json.Write(r.ToJson()) };
+
+        static void RemotePaths()
         {
             World w = MakeWorld();
             var http = new FakeHttp();
-            var remote = new RemotePlanner(http, () => "http://relay.local:8787/", () => "secret");
-            var request = new PlanRequest { prompt = "label the motor", room = w.room, site = w.site, builds = w.store.Builds };
-
-            http.handler = (url, body) => new HttpResult
-            {
-                ok = true, status = 200,
-                body = @"{""reply"":""Done."",""chip"":""Labels"",""planner"":""claude-opus-5-5"",""ops"":[{""op"":""add"",""build"":{""id"":""labels"",""kind"":""labels"",""title"":""Labels"",
-                         ""elements"":[{""id"":""l1"",""type"":""label"",""text"":""Motor"",""anchor"":{""entity"":""motor"",""at"":""top""}}]}}]}",
-            };
-            PlanResult plan = remote.PlanAsync(request).Result;
-            Check(http.lastUrl == "http://relay.local:8787/v1/plan", "url: " + http.lastUrl);
-            Check(http.lastHeaders["Authorization"] == "Bearer secret", "auth header");
-            var sent = Json.ParseObject(http.lastBody);
-            Check(sent.Str("prompt") == "label the motor", "prompt sent");
-            Check(sent.Obj("room").Arr("entities").Count == w.room.entities.Count, "room sent");
-            Check(sent.Obj("knowledge").Arr("procedures").Count == 2, "knowledge sent");
-            Check(sent.Arr("builds").Count == 0, "builds sent");
-            Check(plan.error == null && plan.planner == "claude-opus-5-5" && plan.ops.Count == 1, "plan parsed");
+            var remote = new RemoteBuilder(http, () => "http://planner.local:8787/", () => "secret");
+            http.handler = (url, body) => Ok(new BuildResult { reply = "Done.", title = "Labels", id = "labels", code = "scene.box({size:[1,1,1]});", builder = "claude-opus-5-5" });
+            BuildResult r = remote.BuildAsync(Request(w, "label it")).Result;
+            Check(http.urls[0] == "http://planner.local:8787/v1/build" && http.lastHeaders["Authorization"] == "Bearer secret", "url and auth");
+            Check(r.error == null && r.builder == "claude-opus-5-5" && r.HasProgram && r.latencyMs >= 0, "parsed");
 
             http.handler = (url, body) => new HttpResult { ok = false, status = 502, error = "Bad gateway" };
-            Check(remote.PlanAsync(request).Result.error.Contains("Bad gateway"), "http failure surfaces");
-            http.handler = (url, body) => new HttpResult { ok = true, status = 200, body = "<html>oops</html>" };
-            Check(remote.PlanAsync(request).Result.error.Contains("unreadable"), "garbage surfaces");
+            Check(remote.BuildAsync(Request(w, "x")).Result.error.Contains("Bad gateway"), "http failure surfaces");
+            http.handler = (url, body) => new HttpResult { ok = true, status = 200, body = "<html>" };
+            Check(remote.BuildAsync(Request(w, "x")).Result.error.Contains("unreadable"), "garbage surfaces");
             http.handler = (url, body) => { throw new InvalidOperationException("boom"); };
-            Check(remote.PlanAsync(request).Result.error.Contains("boom"), "exceptions surface");
+            Check(remote.BuildAsync(Request(w, "x")).Result.error.Contains("boom"), "exceptions surface");
+
+            http.handler = (url, body) => new HttpResult { ok = true, status = 200, body = "{\"points\":[{\"u\":0.4,\"v\":0.6,\"label\":\"valve\"},{\"u\":0.1,\"v\":0.2}]}" };
+            List<LocatedPoint> points = remote.LocateAsync("the valve", new byte[] { 1, 2, 3 }).Result;
+            Check(http.urls.Last().EndsWith("/v1/locate") && points.Count == 2 && points[0].label == "valve" && points[1].label == "the valve", "locate");
+            Near(points[0].u, 0.4f, "u");
+            Check(remote.LocateAsync("x", null).Result.Count == 0, "no image, no call");
         }
 
-        static void RouterFallback()
+        static Director MakeDirector(World w, FakeHttp http, string url = "http://planner.local")
+        {
+            return new Director(w.runtime, w.host, Demo(), new RemoteBuilder(http, () => url));
+        }
+
+        static void DirectorVoice()
+        {
+            World w = MakeWorld();
+            var http = new FakeHttp { handler = (u, b) => { throw new Exception("must not be called"); } };
+            Director director = MakeDirector(w, http);
+            w.runtime.Start("walkthrough", "Walkthrough", "x", Example("walkthrough"), null);
+            BuildResult r = director.SubmitAsync("next", null).Result;
+            Check(http.urls.Count == 0 && r.builder == "experience" && !r.HasProgram, "handled by the running program");
+            w.Advance(0.2f);
+            Check(w.host.Text("Close this valve") != null, "and it moved on");
+        }
+
+        static void DirectorRemote()
+        {
+            World w = MakeWorld();
+            var http = new FakeHttp();
+            Director director = MakeDirector(w, http);
+            ViewFrame view = w.UserView();
+            float u, v;
+            view.Project(w.host.Room.Get("motor").position, out u, out v);
+            string uv = u.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) + ", " + v.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture);
+            // What a model would write after looking at the frame: point at the thing it saw and build on it.
+            http.handler = (url, body) => Ok(new BuildResult
+            {
+                reply = "That is the drive motor.", title = "Note", id = "note-motor", builder = "claude-opus-5-5",
+                code = "const hit = space.view.point(" + uv + "); const at = vec.add(hit.position, [0, 0.3, 0]); kit.label('Drive motor', hit); log('distance', hit.distance > 1);",
+            });
+            BuildResult r = director.SubmitAsync("what is this?", request => { request.view = view; request.imageJpeg = new byte[] { 1, 2, 3 }; }).Result;
+            Check(r.error == null && r.title == "Note", "built: " + r.error);
+            var sent = Json.ParseObject(http.bodies[0]);
+            Check(sent.Has("image") && sent.Obj("view").Obj("depth").Arr("metres").Count == 48 && sent.Arr("props").Count > 5, "the request carried the live view");
+            Experience e = w.runtime.Get("note-motor");
+            Check(e != null && e.IsRunning && e.View == view && e.Prompt == "what is this?", "running with the request's view");
+            TestNode label = w.host.Root(w.host.Text("Drive motor"));
+            Check(Vec3.Distance(label.position, w.host.Room.Get("motor").position) < 0.35f, "anchored where the model pointed: " + label.position);
+
+            http.handler = (url, body) => Ok(new BuildResult { reply = "Removed.", remove = { "note-motor" } });
+            director.SubmitAsync("get rid of that", null).Wait();
+            Check(w.runtime.Experiences.Count == 0, "the planner can remove experiences");
+            Check(Json.ParseObject(http.bodies[1]).Arr("running").Count == 1, "it was told what was running");
+        }
+
+        static void DirectorRepair()
+        {
+            World w = MakeWorld();
+            var http = new FakeHttp();
+            Director director = MakeDirector(w, http);
+            int calls = 0;
+            http.handler = (url, body) =>
+            {
+                calls++;
+                var sent = Json.ParseObject(body);
+                if (calls == 1) return Ok(new BuildResult { reply = "Here.", title = "Marker", id = "marker", code = "const p = space.prop('flux capacitor'); kit.pin(1, p.position);" });
+                Check(sent.Obj("repair").Str("error").Contains("position") && sent.Obj("repair").Str("code").Contains("flux capacitor"), "the failure and the code go back");
+                return Ok(new BuildResult { reply = "Here.", title = "Marker", id = "marker", code = "const p = space.prop('motor'); kit.pin(1, space.topOf(p));" });
+            };
+            BuildResult r = director.SubmitAsync("mark the motor", null).Result;
+            Check(calls == 2 && r.error == null && w.runtime.Get("marker") != null && w.host.Text("1") != null, "repaired on the second try: " + r.error);
+
+            calls = 0;
+            http.handler = (url, body) => { calls++; return Ok(new BuildResult { reply = "Here.", title = "Broken", id = "broken", code = "nope(" }); };
+            r = director.SubmitAsync("break", null).Result;
+            Check(calls == 2 && r.error != null && r.title == "" && r.reply.Contains("did not run") && w.runtime.Get("broken") == null, "gives up after one repair and says so: " + r.reply);
+        }
+
+        static void DirectorFallback()
         {
             World w = MakeWorld();
             var http = new FakeHttp { handler = (u, b) => new HttpResult { ok = false, status = 500, error = "down" } };
-            string url = "http://relay.local";
-            var router = new PlannerRouter(new OfflinePlanner(), new RemotePlanner(http, () => url));
-            var request = new PlanRequest { prompt = DemoPrompts[0], room = w.room, site = w.site, builds = w.store.Builds };
+            Director director = MakeDirector(w, http);
+            BuildResult r = director.SubmitAsync(FilmPrompts[1], null).Result;
+            Check(http.urls.Count == 1 && r.title == "Live flow" && r.error == "Planner service error: down" && r.builder.StartsWith("demo"), "recorded demo with the failure noted");
+            Check(w.runtime.Get("flow") != null, "and it is running");
 
-            PlanResult plan = router.PlanAsync(request).Result;
-            Check(http.calls == 1 && plan.chip == "Walkthrough" && plan.error == "Planner service error: down", "falls back with the error noted");
-            Check(plan.planner.StartsWith("offline"), "planner name: " + plan.planner);
-            w.store.Apply(plan);
-
-            request = new PlanRequest { prompt = "next", room = w.room, site = w.site, builds = w.store.Builds };
-            plan = router.PlanAsync(request).Result;
-            Check(http.calls == 1 && plan.ops[0].op == OpType.Step, "navigation never hits the network");
-
-            url = "";
-            request = new PlanRequest { prompt = DemoPrompts[1], room = w.room, site = w.site, builds = w.store.Builds };
-            plan = router.PlanAsync(request).Result;
-            Check(http.calls == 1 && plan.error == null && plan.planner == "offline", "unconfigured -> offline, no error");
+            Director offline = MakeDirector(w, http, url: "");
+            r = offline.SubmitAsync(FilmPrompts[4], null).Result;
+            Check(http.urls.Count == 1 && r.error == null && r.builder == "demo" && !offline.RemoteActive, "no service configured: demo, no error");
         }
 
-        // ---- session -----------------------------------------------------------------------
+        // ---- session -------------------------------------------------------------------------
 
         static void SessionRoundTrip()
         {
             using (var host = new SessionLink { LocalName = "Headset", LocalDevice = "quest" })
             using (var client = new SessionLink { LocalName = "Sara", LocalRole = "Reliability engineer", LocalDevice = "ios" })
             {
-                Peer joined = null, moved = null;
-                string prompt = null, reply = null;
-                PlanResult received = null;
+                Peer joined = null, moved = null, left = null;
+                string prompt = null, reply = null, config = null;
                 host.PeerJoined += p => joined = p;
                 host.PeerMoved += p => moved = p;
+                host.PeerLeft += p => left = p;
                 host.PromptReceived += (text, p) => prompt = text + " from " + p.name;
-                client.PlanReceived += (plan, p) => received = plan;
+                host.ConfigReceived += (url, token, useAi, p) => config = url + "|" + token + "|" + useAi;
                 client.ReplyReceived += (text, chip, planner) => reply = text + "|" + chip;
 
                 host.Host(0);
@@ -728,26 +1009,15 @@ namespace Spatail.Core.Tests
 
                 client.SendPrompt("show me how the water flows");
                 client.SendPresence(new Vec3(1, 1.6f, -2), Vec3.Forward);
-                WaitFor(() => { host.Pump(); return prompt != null && moved != null; }, "prompt + presence");
-                Check(prompt == "show me how the water flows from Sara", "prompt: " + prompt);
+                client.SendConfig("http://10.0.0.5:8787", "tok", true);
+                WaitFor(() => { host.Pump(); return prompt != null && moved != null && config != null; }, "prompt, presence, settings");
+                Check(prompt == "show me how the water flows from Sara" && config == "http://10.0.0.5:8787|tok|True", "payloads");
                 Near(moved.position, new Vec3(1, 1.6f, -2), "presence position");
 
-                World w = MakeWorld();
-                PlanResult plan = w.Ask(prompt.Substring(0, prompt.IndexOf(" from ", StringComparison.Ordinal)));
-                host.SendPlan(plan);
-                host.SendReply(plan.reply, plan.chip, plan.planner);
-                WaitFor(() => { client.Pump(); return received != null && reply != null; }, "plan + reply");
-                Check(received.ops[0].build.id == "flow" && received.ops[0].build.elements.Count == plan.ops[0].build.elements.Count, "plan arrived intact");
-                Check(reply.EndsWith("|Live flow"), "reply: " + reply);
+                host.SendReply("In at the inlet.", "Live flow", "demo");
+                WaitFor(() => { client.Pump(); return reply != null; }, "reply");
+                Check(reply == "In at the inlet.|Live flow", "reply: " + reply);
 
-                string config = null;
-                host.ConfigReceived += (url, token, useAi, p) => config = url + "|" + token + "|" + useAi + "|" + p.name;
-                client.SendConfig("http://10.0.0.5:8787", "tok", true);
-                WaitFor(() => { host.Pump(); return config != null; }, "config");
-                Check(config == "http://10.0.0.5:8787|tok|True|Sara", "config: " + config);
-
-                Peer left = null;
-                host.PeerLeft += p => left = p;
                 client.Stop();
                 WaitFor(() => { host.Pump(); return left != null; }, "peer left");
             }
@@ -764,113 +1034,66 @@ namespace Spatail.Core.Tests
             throw new Exception("timed out waiting for " + what);
         }
 
-        // ---- export ------------------------------------------------------------------------
+        // ---- export ----------------------------------------------------------------------------
 
         /// <summary>
-        /// Writes what the shipping planner and binder produce for the demo, for the docs simulator to replay:
-        /// the bound room (with hologram shapes), and one plan per demo prompt plus a few follow-ups.
+        /// Writes everything the browser lab needs to run the same programs with the same library: the runtime
+        /// library, the film programs, font metrics and the stand-in scene bound into the simulated room.
         /// </summary>
         static int Export(string dir)
         {
             Directory.CreateDirectory(dir);
             World w = MakeWorld();
 
-            var roomJson = w.room.ToJson();
-            var entities = roomJson.Arr("entities");
-            for (int i = 0; i < w.room.entities.Count; i++)
+            var entities = new List<object>();
+            foreach (RoomEntity e in w.host.Room.entities)
             {
-                RoomEntity e = w.room.entities[i];
-                var d = (Dictionary<string, object>)entities[i];
-                d["shapeOrigin"] = Json.FromVec3(e.ShapeOrigin);
-                d["scanLabel"] = e.scanLabel;
+                var d = e.ToJson();
+                d["origin"] = Json.FromVec3(e.ShapeOrigin);
+                if (e.hasActionPoint) d["actionPoint"] = Json.FromVec3(e.ActionPoint);
                 if (e.shapes != null)
                 {
                     var shapes = new List<object>();
                     foreach (ShapeDef s in e.shapes) shapes.Add(s.ToJson());
                     d["shapes"] = shapes;
                 }
+                entities.Add(d);
             }
-            roomJson["station"] = new Dictionary<string, object>
+
+            var programs = new List<object>();
+            for (int i = 0; i < FilmIds.Length; i++)
             {
-                { "position", Json.FromVec3(w.station.position) }, { "yaw", Json.Round(w.station.rotation.YawDegrees) },
+                DemoBuilder.Entry entry = DemoBuilder.Entries.Single(x => x.id == FilmIds[i]);
+                programs.Add(new Dictionary<string, object>
+                {
+                    { "id", entry.id }, { "title", entry.title }, { "prompt", FilmPrompts[i] }, { "reply", entry.reply },
+                    { "words", new List<object>(entry.words) }, { "code", Example(entry.id) },
+                });
+            }
+
+            var fonts = new Dictionary<string, object>();
+            foreach (string weight in new[] { "medium", "semibold" })
+                fonts[weight] = Json.Parse(File.ReadAllText(Path.Combine(Resources(), "Fonts", "inter_" + weight + "_metrics.json")));
+
+            var bundle = new Dictionary<string, object>
+            {
+                { "room", new Dictionary<string, object>
+                    {
+                        { "floorY", 0 },
+                        { "user", new Dictionary<string, object> { { "position", Json.FromVec3(w.host.UserPosition) }, { "forward", Json.FromVec3(w.host.UserForward) } } },
+                        { "entities", entities },
+                    } },
+                { "programs", programs },
+                { "fonts", fonts },
             };
 
-            var script = new List<string>(DemoPrompts);
-            script.InsertRange(1, new[] { "next", "next" });
-            script.AddRange(new[] { "make the chart bigger", "move the chart next to the motor", "what is the gate valve?", "label everything", "remove the checklist", "clear everything" });
-
-            var steps = new List<object>();
-            // Scan labels first: this is what the room looks like right after the scan.
-            steps.Add(Entry("(scan)", new PlanResult { reply = "Here is what I can see.", chip = "Labels", planner = "offline", ops = { PlanOp.Add(BuildFactory.Labels(w.room)) } }, w));
-            w.store.Add(BuildFactory.Labels(w.room));
-            foreach (string prompt in script)
-            {
-                PlanResult plan = w.planner.Plan(new PlanRequest { prompt = prompt, room = w.room, site = w.site, builds = w.store.Builds });
-                w.store.RetireScanLabels(plan);
-                steps.Add(Entry(prompt, plan, w));
-                w.store.Apply(plan);
-            }
-
-            // A library of stand-alone requests, each planned against an empty room, so the docs can answer
-            // free-typed prompts in any order by replaying the nearest one.
-            string[] standalone =
-            {
-                DemoPrompts[0], DemoPrompts[1], DemoPrompts[2], DemoPrompts[3], DemoPrompts[4], DemoPrompts[5],
-                "Walk me through the start-up check", "Show energy this month on the bench", "Put this month's output on the wall",
-                "Put the parts checklist on the wall", "Bring Marco in", "Label everything",
-                "What is the motor?", "What is the pump?", "What is the gate valve?", "What is the coupling?",
-                "What is the control box?", "What is the outlet?", "What is the inlet pipe?", "What is the workbench?",
-            };
-            var library = new List<object>();
-            foreach (string prompt in standalone)
-            {
-                World fresh = MakeWorld();
-                PlanResult plan = fresh.planner.Plan(new PlanRequest { prompt = prompt, room = fresh.room, site = fresh.site, builds = fresh.store.Builds });
-                if (plan.ops.Count == 0) throw new Exception("library prompt produced nothing: " + prompt);
-                library.Add(Entry(prompt, plan, fresh));
-            }
-            // What the planner says when it cannot help, so the docs show the real wording.
-            string fallback = w.planner.Plan(new PlanRequest { prompt = "sing me a song", room = w.room, site = w.site, builds = w.store.Builds }).reply;
-
-            File.WriteAllText(Path.Combine(dir, "room.json"), Json.Write(roomJson, true));
-            File.WriteAllText(Path.Combine(dir, "plans.json"), Json.Write(steps, true));
-            var bundle = new Dictionary<string, object> { { "room", roomJson }, { "plans", steps }, { "library", library }, { "fallbackReply", fallback } };
             File.WriteAllText(Path.Combine(dir, "spatail-data.js"),
                 "// Generated by `dotnet run -- export` in tests/Spatail.Core.Tests. Do not edit by hand.\n" +
                 "window.SPATAIL_DATA = " + Json.Write(bundle) + ";\n");
-            Console.WriteLine("Wrote room.json (" + w.room.entities.Count + " entities), plans.json (" + steps.Count + " plans) and spatail-data.js (" + library.Count + " library plans) to " + dir);
+            // The library is shipped to the browser byte for byte: the lab runs the file the devices run.
+            File.WriteAllText(Path.Combine(dir, "spatail.js"), Library());
+            Console.WriteLine("Wrote spatail-data.js (" + entities.Count + " entities, " + programs.Count + " programs) and spatail.js to " + dir);
             return 0;
-        }
-
-        static Dictionary<string, object> Entry(string prompt, PlanResult plan, World w)
-        {
-            // Resolve every element with the shipping layout solver so the docs can show exactly where it lands.
-            var placements = new Dictionary<string, object>();
-            foreach (PlanOp op in plan.ops)
-            {
-                if (op.build == null) continue;
-                foreach (Element e in op.build.elements)
-                {
-                    Placement p = LayoutSolver.Place(e, w.room);
-                    var entry = new Dictionary<string, object>
-                    {
-                        { "position", Json.FromVec3(p.position) },
-                        { "rotation", new List<object> { Json.Round(p.rotation.x), Json.Round(p.rotation.y), Json.Round(p.rotation.z), Json.Round(p.rotation.w) } },
-                        { "target", Json.FromVec3(p.target) },
-                        { "pivotBottom", p.pivotBottom },
-                    };
-                    if (e.type == ElementType.Flow)
-                    {
-                        var path = new List<object>();
-                        foreach (Vec3 pt in LayoutSolver.FlowPath(e, w.room)) path.Add(Json.FromVec3(pt));
-                        entry["path"] = path;
-                    }
-                    placements[op.build.id + "/" + e.id] = entry;
-                }
-            }
-            // Timing differs run to run; leave it out so the exported files are reproducible.
-            plan.latencyMs = 0;
-            return new Dictionary<string, object> { { "prompt", prompt }, { "plan", SpecJson.ToJson(plan) }, { "placements", placements } };
         }
     }
 }

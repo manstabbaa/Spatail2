@@ -91,167 +91,10 @@ namespace Spatail.Core
         }
     }
 
-    public sealed class ProcedureStep
-    {
-        public string entity;
-        public string title;
-        public string body;
-        /// <summary>turn-cw | turn-ccw | press | inspect | none</summary>
-        public string action = "none";
-    }
-
-    public sealed class Procedure
-    {
-        public string id;
-        public string title;
-        public List<string> aliases = new List<string>();
-        public List<ProcedureStep> steps = new List<ProcedureStep>();
-    }
-
-    public sealed class FlowDef
-    {
-        public string id;
-        public string title;
-        public string medium;
-        public string rate;
-        public List<string> aliases = new List<string>();
-        /// <summary>Centre-line of the flow in the station frame, upstream to downstream.</summary>
-        public List<Vec3> path = new List<Vec3>();
-        public float radius = 0.07f;
-        /// <summary>Entity ids whose volumes light up while the flow is shown.</summary>
-        public List<string> highlight = new List<string>();
-        public string inletEntity;
-        public string outletEntity;
-    }
-
-    public sealed class FaultRecord
-    {
-        public string entity;
-        public string title;
-        public string when;
-        public string severity = "medium";
-        public string detail;
-    }
-
-    public sealed class MetricDef
-    {
-        public string id;
-        public string title;
-        public string unit;
-        public List<string> aliases = new List<string>();
-        public List<float> values = new List<float>();
-        public List<string> labels = new List<string>();
-    }
-
-    public sealed class SpareItem
-    {
-        public string text;
-        public bool done;
-    }
-
-    public sealed class Person
-    {
-        public string name;
-        public string initial;
-        public string role;
-    }
-
     /// <summary>
-    /// What the organisation knows about this equipment. In production these records come from manuals, the CMMS
-    /// and the historian; the planner turns them into spatial content on request.
-    /// </summary>
-    public sealed class Knowledge
-    {
-        public List<Procedure> procedures = new List<Procedure>();
-        public List<FlowDef> flows = new List<FlowDef>();
-        public List<FaultRecord> faults = new List<FaultRecord>();
-        public string faultsTitle = "Recent faults";
-        public List<MetricDef> metrics = new List<MetricDef>();
-        public string sparesTitle = "Parts check";
-        public List<SpareItem> spares = new List<SpareItem>();
-        /// <summary>Initials of the people already on the job, and how many more are not shown.</summary>
-        public List<string> sparesPeople = new List<string>();
-        public int sparesMore;
-        public List<Person> people = new List<Person>();
-        /// <summary>The original JSON, forwarded verbatim to the AI planner as context.</summary>
-        public Dictionary<string, object> raw = new Dictionary<string, object>();
-
-        public Person FindPerson(string normalizedPhrase)
-        {
-            foreach (Person p in people)
-                if (TextMatch.ContainsWord(normalizedPhrase, p.name)) return p;
-            return null;
-        }
-
-        public static Knowledge FromJson(Dictionary<string, object> o)
-        {
-            var k = new Knowledge();
-            if (o == null) return k;
-            k.raw = o;
-            foreach (var d in Objects(o.Arr("procedures")))
-            {
-                var proc = new Procedure { id = d.Str("id"), title = d.Str("title"), aliases = d.StrList("aliases") };
-                foreach (var s in Objects(d.Arr("steps")))
-                    proc.steps.Add(new ProcedureStep { entity = s.Str("entity"), title = s.Str("title"), body = s.Str("body"), action = s.Str("action", "none") });
-                k.procedures.Add(proc);
-            }
-            foreach (var d in Objects(o.Arr("flows")))
-            {
-                var f = new FlowDef
-                {
-                    id = d.Str("id"), title = d.Str("title"), medium = d.Str("medium"), rate = d.Str("rate"),
-                    aliases = d.StrList("aliases"), radius = d.Float("radius", 0.07f), highlight = d.StrList("highlight"),
-                    inletEntity = d.Str("inlet"), outletEntity = d.Str("outlet"),
-                };
-                var path = d.Arr("path");
-                if (path != null) foreach (object pt in path) f.path.Add(Json.ToVec3(pt));
-                k.flows.Add(f);
-            }
-            var faults = o.Obj("faults");
-            if (faults != null)
-            {
-                k.faultsTitle = faults.Str("title", k.faultsTitle);
-                foreach (var d in Objects(faults.Arr("records")))
-                    k.faults.Add(new FaultRecord { entity = d.Str("entity"), title = d.Str("title"), when = d.Str("when"), severity = d.Str("severity", "medium"), detail = d.Str("detail") });
-            }
-            foreach (var d in Objects(o.Arr("metrics")))
-            {
-                var m = new MetricDef { id = d.Str("id"), title = d.Str("title"), unit = d.Str("unit"), aliases = d.StrList("aliases"), labels = d.StrList("labels") };
-                var values = d.Arr("values");
-                if (values != null) foreach (object v in values) m.values.Add((float)Json.ToDouble(v));
-                k.metrics.Add(m);
-            }
-            var spares = o.Obj("spares");
-            if (spares != null)
-            {
-                k.sparesTitle = spares.Str("title", k.sparesTitle);
-                k.sparesPeople = spares.StrList("people");
-                k.sparesMore = spares.Int("more");
-                foreach (var d in Objects(spares.Arr("items")))
-                    k.spares.Add(new SpareItem { text = d.Str("text"), done = d.Bool("done") });
-            }
-            foreach (var d in Objects(o.Arr("people")))
-            {
-                string name = d.Str("name", "");
-                k.people.Add(new Person { name = name, initial = d.Str("initial", name.Length > 0 ? name.Substring(0, 1) : "?"), role = d.Str("role") });
-            }
-            return k;
-        }
-
-        static IEnumerable<Dictionary<string, object>> Objects(List<object> list)
-        {
-            if (list == null) yield break;
-            foreach (object item in list)
-            {
-                var d = item as Dictionary<string, object>;
-                if (d != null) yield return d;
-            }
-        }
-    }
-
-    /// <summary>
-    /// A registered site: one piece of equipment (the digital twin), its supporting fixtures, and what is known about it.
-    /// Loaded from JSON so new equipment can be added without touching code.
+    /// A stand-in scene: a machine and its fixtures as simple holograms with named parts. It exists so Spatail can
+    /// be shown and tested where there is no real equipment. In real use nothing is defined ahead of time; the
+    /// planner works from what the device senses.
     /// </summary>
     public sealed class SiteDefinition
     {
@@ -265,7 +108,6 @@ namespace Spatail.Core
         public Vec3 equipmentSize;
         public List<PartDef> parts = new List<PartDef>();
         public List<PartDef> fixtures = new List<PartDef>();
-        public Knowledge knowledge = new Knowledge();
 
         public static SiteDefinition Parse(string json)
         {
@@ -295,7 +137,6 @@ namespace Spatail.Core
                     var d = f as Dictionary<string, object>;
                     if (d != null) site.fixtures.Add(PartDef.FromJson(d));
                 }
-            site.knowledge = Knowledge.FromJson(o.Obj("knowledge"));
             return site;
         }
 

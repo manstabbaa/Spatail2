@@ -3,19 +3,17 @@ using System.Collections.Generic;
 namespace Spatail.Core
 {
     /// <summary>
-    /// Messages exchanged between devices in a shared session. One JSON object per line over TCP.
-    /// Poses travel in the station frame (relative to the registered equipment), so two devices that have each
-    /// aligned the equipment see content and each other in the same place without sharing spatial anchors.
+    /// Messages exchanged between linked devices. One JSON object per line over TCP.
+    /// Today the link carries requests (a phone can drive a headset), replies, presence and settings. Programs
+    /// are not mirrored between devices yet: each is written against one device's view of the space.
     /// </summary>
     public static class SessionMessage
     {
         /// <summary>First message in each direction. Carries the sender's display name and role.</summary>
         public const string Hello = "hello";
-        /// <summary>A plan to apply to the receiver's build store.</summary>
-        public const string Plan = "plan";
         /// <summary>A prompt the sender wants the host to plan and execute.</summary>
         public const string Prompt = "prompt";
-        /// <summary>Head position and gaze of a participant, in the station frame.</summary>
+        /// <summary>Head position and gaze of a participant, in the sender's world frame.</summary>
         public const string Presence = "presence";
         /// <summary>A participant left.</summary>
         public const string Bye = "bye";
@@ -34,11 +32,6 @@ namespace Spatail.Core
         {
             { "type", Hello }, { "name", name }, { "role", role }, { "device", device }, { "protocol", 1 },
         });
-
-        public static string MakePlan(PlanResult plan)
-        {
-            return Json.Write(new Dictionary<string, object> { { "type", Plan }, { "plan", SpecJson.ToJson(plan) } });
-        }
 
         public static string MakePrompt(string text, string from) => Json.Write(new Dictionary<string, object>
         {
@@ -64,7 +57,7 @@ namespace Spatail.Core
         public string name = "Guest";
         public string role = "";
         public string device = "";
-        /// <summary>Station-frame head position. Valid once <see cref="hasPose"/> is true.</summary>
+        /// <summary>Head position in the sender's world frame. Valid once <see cref="hasPose"/> is true.</summary>
         public Vec3 position;
         public Vec3 forward = Vec3.Forward;
         public bool hasPose;

@@ -1,0 +1,47 @@
+// "What parts do I need?"
+// The spares for this job as a tickable list above the bench, with who else is on it.
+const items = state.items || [
+  { text: 'Shaft seal', done: true },
+  { text: 'Gasket set', done: true },
+  { text: 'Coupling insert', done: false },
+];
+state.items = items;
+const people = ['M', 'J'], more = 3;
+
+const bench = space.prop('workbench') || space.surfaces().find(s => s.kind === 'table');
+const width = 0.3, pad = 0.024, row = 0.042, box = 0.027, avatar = 0.036;
+const anchor = bench ? vec.add(space.topOf(bench), [0, 0.3, 0]) : vec.add(user.head.position, vec.scale(vec.flat(user.head.forward), 0.9));
+
+const list = scene.group({ position: anchor, rotation: space.faceUser(anchor, 20) });
+const title = scene.text({ parent: list, text: 'Parts check', size: theme.text.title, weight: 'semibold', color: 'ink', anchor: 'top' });
+const height = pad + title.height + 0.02 + items.length * row + 0.012 + avatar + pad;
+// The panel's bottom edge sits on the anchor point.
+const topY = height, left = -width / 2 + pad;
+scene.panel({ parent: list, width, height, radius: 0.024, fill: 'surface', border: 'accent', borderWidth: 0.003, position: [0, height / 2, 0] });
+title.position = [left, topY - pad, -theme.layer];
+
+let y = topY - pad - title.height - 0.02;
+items.forEach(item => {
+  const line = scene.group({ parent: list, position: [0, y - row / 2, -theme.layer] });
+  const square = scene.panel({ parent: line, width: box, height: box, radius: 0.007, border: 'accent', borderWidth: 0.0028, position: [left + box / 2, 0, 0] });
+  const tick = scene.text({ parent: line, text: '✓', size: 0.024, weight: 'semibold', align: 'center', color: '#FFFFFF', position: [left + box / 2, 0, -theme.layer] });
+  const label = scene.text({ parent: line, text: item.text, size: 0.024, position: [left + box + 0.014, 0, 0] });
+  const paint = () => {
+    square.fill = item.done ? 'accent' : 'surface';
+    tick.visible = item.done;
+    label.color = item.done ? 'muted' : 'ink';
+  };
+  paint();
+  // A wide, flat hit area makes the whole row tappable.
+  scene.panel({ parent: line, width: width - pad, height: row, fill: 'surface', opacity: 0, position: [0, 0, theme.layer] })
+    .onClick(() => { item.done = !item.done; paint(); });
+  y -= row;
+});
+
+[...people, `+${more}`].forEach((who, i) => {
+  const extra = i === people.length;
+  const chip = scene.group({ parent: list, position: [left + avatar / 2 + i * avatar * 0.78, y - 0.012 - avatar / 2, -theme.layer * (1.5 + i * 0.5)] });
+  scene.panel({ parent: chip, width: avatar, height: avatar, radius: avatar / 2, fill: extra ? 'accentSoft' : 'accent', border: 'surface', borderWidth: 0.0025 });
+  scene.text({ parent: chip, text: who, size: extra ? 0.014 : 0.017, weight: 'semibold', align: 'center', color: extra ? 'accent' : '#FFFFFF', position: [0, 0, -theme.layer * 0.4] });
+});
+kit.appear(list);

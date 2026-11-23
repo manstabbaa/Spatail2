@@ -1,0 +1,20 @@
+// "Show me how the water flows"
+// Chevrons streaming in through the inlet, through the casing and up the outlet, with the wetted sections lit.
+const pump = space.prop('pump p-101');
+// The path is known in the machine's own frame (origin on the floor under it).
+const P = (x, y, z) => vec.add(pump.origin, quat.rotate(pump.rotation, [x, y, z]));
+const path = [P(1.3, 0.46, 0), P(0.2, 0.46, 0), P(0.2, 1.26, 0)];
+
+scene.tube({ points: path, radius: 0.09, color: 'accent', opacity: 0.85, flow: { speed: 0.35, density: 7 } });
+
+for (const name of ['inlet pipe', 'outlet']) {
+  const part = space.prop(name);
+  if (!part) continue;
+  kit.glow(part, { inflate: 1.02 });
+  kit.appear(kit.label(name === 'outlet' ? 'Outlet' : 'Inlet', space.topOf(part), { style: 'solid' }));
+}
+
+// The flow rate rides above the first run.
+const mid = vec.add(vec.lerp(path[0], path[1], 0.5), [0, 0.28, 0]);
+const rate = kit.pill('42 m³/h', { style: 'outline', size: theme.text.small, position: mid, billboard: 'full' });
+kit.appear(rate, { delay: 0.2 });

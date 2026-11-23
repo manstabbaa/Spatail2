@@ -1,0 +1,18 @@
+// "Bring Sara in"
+// A presence marker for a colleague joining the room: a pawn with her initial and name.
+const pump = space.prop('pump p-101');
+const side = pump ? vec.add(pump.position, quat.rotate(pump.rotation, [pump.size[0] / 2 + 0.1, 0, 0])) : user.head.position;
+const spot = space.freeFloorNear(side, 0.25);
+const sara = scene.group({ position: spot });
+
+scene.cylinder({ parent: sara, radius: 0.12, topRadius: 0.035, height: 0.44, position: [0, 0.23, 0], color: 'accent' });
+const ring = scene.disc({ parent: sara, radius: 0.22, position: [0, 0.004, 0], color: 'accent', opacity: 0.22, shade: false });
+scene.onFrame((dt, t) => ring.scale = 1 + 0.08 * Math.sin(t * 2.4));
+
+const face = scene.group({ parent: sara, position: [0, 0.55, 0], billboard: 'full' });
+scene.panel({ parent: face, width: 0.14, height: 0.14, radius: 0.07, fill: 'accent', border: '#FFFFFF', borderWidth: 0.004 });
+scene.text({ parent: face, text: 'S', size: 0.07, weight: 'semibold', align: 'center', color: '#FFFFFF', position: [0, 0, -theme.layer] });
+
+const name = kit.pill('Sara', { style: 'outline', position: [0, 0.72, 0], billboard: 'full' });
+sara.add(name);
+kit.appear(sara);

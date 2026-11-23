@@ -1,0 +1,27 @@
+// "Has it failed before?"
+// Last week's two fault records, shown where they happened.
+const faults = [
+  { part: 'motor', title: 'Bearing over-temperature', when: '6 days ago', detail: '82 °C at the drive-end bearing; tripped on thermal overload.' },
+  { part: 'coupling', title: 'Vibration alarm', when: '4 days ago', detail: '7.1 mm/s RMS; misalignment suspected.' },
+].map(f => ({ ...f, prop: space.prop(f.part) })).filter(f => f.prop);
+
+let open = null;
+faults.forEach((f, i) => {
+  kit.glow(f.prop, { color: 'warning' });
+  const pin = kit.pin('!', space.topOf(f.prop), { color: 'warning' });
+  kit.appear(pin, { delay: i * 0.1 });
+  // Tap a marker for the record behind it.
+  pin.onClick(() => {
+    if (open) open.remove();
+    const at = space.beside(f.prop);
+    open = kit.card({ position: at, rotation: space.faceUser(at, 35), color: 'warning', title: f.title, body: `${f.when}. ${f.detail}`,
+      buttons: [{ text: 'Close', primary: false, onClick: () => { open.remove(); open = null; } }] });
+    kit.appear(open);
+  });
+});
+
+if (faults.length) {
+  const at = vec.add(space.beside(faults[0].prop, 0.2), [0, 0.16, 0]);
+  const title = kit.pill("Last week's faults", { color: 'warning', style: 'outline', position: at, billboard: 'full' });
+  kit.appear(title, { delay: 0.25 });
+}
