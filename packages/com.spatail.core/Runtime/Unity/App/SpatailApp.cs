@@ -182,6 +182,8 @@ namespace Spatail
 
         void Rebind(RoomModel raw)
         {
+            // The station stands on the floor, wherever the device's latest estimate puts it.
+            Station = new Pose3(new Vec3(Station.position.x, raw.floorY, Station.position.z), Station.rotation);
             Room = SiteBinder.Bind(Site, raw, Station);
             Twin.Rebuild(Room);
             Content.Relayout();

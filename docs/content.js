@@ -44,17 +44,19 @@ window.SPATAIL_APPS = [
     controls: [
       ['Tap', 'Select pins, card buttons, checklist rows in AR.'],
       ['Type or dictate', 'In the prompt field; the mic uses on-device speech recognition.'],
-      ['Move pump', 'From Settings: drag on the floor, tap to drop, twist with two fingers to turn.'],
-      ['Drawer handle', 'Open the inspector tabs.']
+      ['Move pump', 'From Settings: drag on the floor, lift to drop, twist with two fingers to turn.'],
+      ['Tools button', 'Opens the drawer with the six tabs.']
     ],
     steps: [
-      { text: 'On a Mac, install <b>Unity 6.3 LTS</b> (6000.3.x) with iOS Build Support, and Xcode.' },
-      { text: 'Open <code>apps/spatail-devtool-ios</code> in Unity Hub and let the automatic setup finish (scene, player settings, ARKit loader). Re-run from <b>Spatail &gt; Setup Project</b>.' },
+      { text: 'On a Mac, install <b>Unity 6.3 LTS</b> (6000.3.x) with iOS Build Support, and Xcode 15 or newer.' },
+      { text: 'Open <code>apps/spatail-devtool-ios</code> in Unity Hub and let the automatic setup finish (scene, player settings, ARKit loader). If asked to enable the Input System backend, accept and let the editor restart. Re-run from <b>Spatail &gt; Setup Project</b>.' },
       { text: 'Press <b>Play</b>: the dev tool UI runs over the simulated room, so the tooling can be worked on without a phone.' },
       { text: 'Commit what Unity generated (<code>.meta</code> files, <code>Assets/Scenes</code>, <code>Assets/XR</code>, <code>ProjectSettings</code>).' },
-      { text: 'Export the Xcode project with <b>Spatail &gt; Build iOS (Xcode project)</b>, or from a terminal. Set <code>SPATAIL_IOS_TEAM_ID</code> first to pre-fill automatic signing.', cmd: 'Unity -batchmode -projectPath apps/spatail-devtool-ios -buildTarget iOS -executeMethod Spatail.DevTool.EditorTools.DevToolBuild.BuildFromCommandLine -logFile -' },
-      { text: 'Open <code>apps/spatail-devtool-ios/Builds/iOS</code> in Xcode, choose your team if it is not set, and run on a device with ARKit.' },
-      { text: 'Allow camera, microphone, speech recognition and local network access when asked. Move the phone until the floor is found; the pump appears in front of you.' }
+      { text: 'Switch platform: <b>File &gt; Build Profiles</b>, select iOS, Switch Platform. Then export with <b>Spatail &gt; Build iOS (Xcode project)</b>.' },
+      { text: 'Or from a terminal, in two passes. The first configures the project and lets Unity recompile with ARKit enabled:', cmd: 'Unity -batchmode -quit -projectPath apps/spatail-devtool-ios -buildTarget iOS -executeMethod Spatail.DevTool.Editor.DevToolBuild.SetupBatch' },
+      { text: 'The second exports <code>Builds/iOS</code>. Set <code>SPATAIL_IOS_TEAM_ID</code> to pre-fill automatic signing:', cmd: 'SPATAIL_IOS_TEAM_ID=ABCDE12345 Unity -batchmode -quit -projectPath apps/spatail-devtool-ios -buildTarget iOS -executeMethod Spatail.DevTool.Editor.DevToolBuild.BuildBatch' },
+      { text: 'Open <code>Builds/iOS/Unity-iPhone.xcodeproj</code> in Xcode, choose your team if it is not set, and run on a device with ARKit.' },
+      { text: 'Allow camera access (and microphone, speech recognition and local network when you first use them). Move the phone with the floor in view until the pump appears.' }
     ],
     note: 'Not yet run in Unity, Xcode or on a phone. The native speech plugin is Objective-C++ written without an Apple toolchain, so expect to fix small things on its first compile.'
   }
@@ -70,8 +72,9 @@ window.SPATAIL_STATUS = [
   ['Font atlases', 'Tested', 'Baked from Inter with <code>tools/fontgen</code>, then rendered offline using the same glyph maths as <code>SpatialText</code> to confirm spacing and orientation.'],
   ['This guide\'s simulator', 'Tested', 'Headless browser run: every exported plan replays without errors; pin, card and checklist interactions, both themes and phone width checked.'],
   ['Quest adapter (camera rig, passthrough, MR Utility Kit, pointers, keyboard)', 'Checked against SDK source', 'Every Meta and OpenXR API it calls was located in the 209 / 1.19 package sources. Compiles against Unity reference assemblies plus stubs copied from those sources, in editor and Android configurations.'],
-  ['Quest editor setup and build scripts', 'Checked against SDK source', 'Compiled against an older <code>UnityEditor</code> reference plus stubs; four newer editor APIs were confirmed by finding them used in the package sources.'],
-  ['iOS adapter (AR session, plane-based room, touch, dev tool UI)', 'Checked against SDK source', 'AR Foundation 6.3.5 APIs located in the package source and compile-checked the same way.'],
+  ['Quest editor setup and build scripts', 'Checked against SDK source', 'Compiled against an older <code>UnityEditor</code> reference plus stubs. A handful of newer editor APIs could only be confirmed by finding them used in the package sources, and one is from memory.'],
+  ['iOS adapter (AR session, plane-based room, touch, dev tool UI)', 'Checked against SDK source', 'AR Foundation 6.3.5, XR Core Utils and Input System APIs located in the package sources. Compiles in four configurations against Unity reference assemblies, the Input System built from source, and stubs copied from AR Foundation.'],
+  ['iOS editor setup, build and Xcode post-process scripts', 'Checked against SDK source', 'Setup and build compile against a 2021 <code>UnityEditor</code> reference with three newer members substituted. The Xcode post-process step was verified by reading only, and several of its calls are from memory.'],
   ['iOS native speech plugin', 'Not compiled', 'Objective-C++ against SFSpeechRecognizer and AVAudioEngine, read carefully but never built.'],
   ['First Unity import, builds, and everything on device', 'Not run', 'Tracking, passthrough compositing, scene permissions, text legibility in the headset, performance. These need your hardware.']
 ];

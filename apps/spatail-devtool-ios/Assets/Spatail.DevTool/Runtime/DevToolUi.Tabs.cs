@@ -346,6 +346,8 @@ namespace Spatail.DevTool
                     GUI.Label(new Rect(card.x + pad, card.y + P(24), card.width - pad * 2f, P(18)), detail, _textSmall);
                 }
                 if (!session.IsHost) Line("Requests you send are planned by the host and appear for everyone.");
+                // Typing a URL in a headset is slow; set the planner up here and push it across.
+                if (peers.Count > 0 && GUI.Button(Next(RowHeight, 8), "Send my planner settings to the others", _buttonSecondary)) _app.SendPlannerSettingsToPeers();
                 if (GUI.Button(Next(RowHeight), session.IsHost ? "Stop hosting" : "Leave session", _buttonDanger)) _app.LeaveSession();
                 return;
             }

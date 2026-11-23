@@ -39,9 +39,10 @@ headset first so the app can see your floor, walls and tables. Details and contr
 
 ## Put the dev tool on an iPhone
 
-Open `apps/spatail-devtool-ios` on a Mac, choose **Spatail > Build iOS (Xcode project)** (output:
-`apps/spatail-devtool-ios/Builds/iOS`), open the generated project in Xcode, pick your team and run on a device.
-Details: `apps/spatail-devtool-ios/README.md`.
+Open `apps/spatail-devtool-ios` on a Mac, switch the platform to iOS (**File > Build Profiles**), choose
+**Spatail > Build iOS (Xcode project)** (output: `apps/spatail-devtool-ios/Builds/iOS`), open
+`Unity-iPhone.xcodeproj` in Xcode, pick your team and run on a device. Details and the command-line build:
+`apps/spatail-devtool-ios/README.md`.
 
 ## Turn on the AI planner
 
@@ -77,7 +78,8 @@ Devices never hold a model API key. If the service is unreachable the apps fall 
 - **Layout.** Anchors such as `floor-near` or `callout` are resolved against the live room, so content lands
   somewhere sensible instead of being dropped in with no sense of the room.
 
-The developer guide in `docs/` walks through all of it interactively.
+The developer guide walks through all of it interactively, with a simulator you can type requests into:
+https://claude.ai/artifact/TY21seoSPcaLnVCzMdfPGe (source in `docs/`).
 
 ## Tests and checks
 

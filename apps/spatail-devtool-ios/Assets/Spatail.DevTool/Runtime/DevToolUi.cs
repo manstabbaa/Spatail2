@@ -201,9 +201,9 @@ namespace Spatail.DevTool
 
             // [tools] [mic] [ prompt ............ ] [send]
             float gap = P(8);
-            var tools = new Rect(x, y, P(58), row);
-            var mic = new Rect(tools.xMax + gap, y, P(50), row);
-            var send = new Rect(x + width - P(64), y, P(64), row);
+            var tools = new Rect(x, y, P(52), row);
+            var mic = new Rect(tools.xMax + gap, y, P(46), row);
+            var send = new Rect(x + width - P(58), y, P(58), row);
             var field = new Rect(mic.xMax + gap, y, send.x - gap - mic.xMax - gap, row);
 
             if (GUI.Button(tools, _drawerOpen ? "Close" : "Tools", _drawerOpen ? _buttonRound : _buttonRoundQuiet)) _drawerOpen = !_drawerOpen;

@@ -80,17 +80,6 @@ namespace Spatail.DevTool
             pointer.IsOverUi = ui.IsOverUi;
             pointer.IsMoveMode = () => app.IsMovingStation;
 
-            // When the floor estimate improves, keep the pump standing on it.
-            room.Changed += () =>
-            {
-                if (app.State == AppState.Starting || app.IsMovingStation || app.Room == null) return;
-                float floor = app.Room.floorY;
-                if (Mathf.Abs(app.Station.position.y - floor) > 0.01f)
-                {
-                    var p = app.Station.position;
-                    app.PlaceStation(new Spatail.Core.Pose3(new Spatail.Core.Vec3(p.x, floor, p.z), app.Station.rotation));
-                }
-            };
             return app;
         }
 
