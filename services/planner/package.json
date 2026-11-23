@@ -2,7 +2,7 @@
   "name": "@spatail/planner",
   "version": "0.1.0",
   "private": true,
-  "description": "Spatail planner service: turns a spoken request plus a room model into spatial content, using Claude.",
+  "description": "Spatail planner service: Claude looks at what the device senses and writes the program that builds the experience.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/src/server.js",
     "test": "tsc -p tsconfig.json && node --test \"dist/test/*.test.js\"",
-    "plan": "node dist/src/cli.js"
+    "replay": "node dist/src/replay.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0"

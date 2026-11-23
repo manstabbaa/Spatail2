@@ -1,170 +1,189 @@
 import Anthropic from "@anthropic-ai/sdk";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
-import { DEFAULT_OPTIONS, normalizePlan, planWithClaude, type PlannerClient } from "../src/planner.js";
-import { knowledgeBlock, stableStringify, SYSTEM_PROMPT, userMessage } from "../src/prompt.js";
-import { ANCHOR_MODES, ELEMENT_TYPES, PLAN_SCHEMA, type PlanRequest } from "../src/schema.js";
+import { API_REFERENCE } from "../src/api.js";
+import { checkProgram } from "../src/check.js";
+import { LIBRARY_PATH, loadContext, REPO_ROOT, SERVICE_ROOT } from "../src/context.js";
+import { buildWithClaude, DEFAULT_OPTIONS, locateWithClaude, normalizeBuild, type PlannerClient } from "../src/planner.js";
+import { knowledgeBlock, sensedContext, stableStringify, systemPrompt } from "../src/prompt.js";
+import { BUILD_SCHEMA, LOCATE_SCHEMA, type BuildRequest } from "../src/schema.js";
 import { createPlannerServer, optionsFromEnv } from "../src/server.js";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const repo = path.resolve(here, "../../../..");
-const load = (relative: string) => JSON.parse(readFileSync(path.join(repo, relative), "utf8"));
+const library = readFileSync(LIBRARY_PATH, "utf8");
+const context = loadContext({});
 
-function sampleRequest(prompt = "label the motor"): PlanRequest {
-  const site = load("packages/com.spatail.core/Runtime/Resources/Spatail/pump_station.json");
-  const room = load("docs/sim/data/room.json");
-  return { prompt, site: { id: site.id, name: site.name, equipment: site.equipment.id }, room, knowledge: site.knowledge, builds: [] };
+/** The stand-in room the lab uses, as a request a device could have sent. */
+function standInRequest(prompt = "what is this?"): BuildRequest {
+  const text = readFileSync(path.join(REPO_ROOT, "docs/lab/data/spatail-data.js"), "utf8");
+  const data = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
+  const entities = data.room.entities as Array<Record<string, any>>;
+  return {
+    prompt,
+    image: "/9j/2Q==",
+    view: { width: 1280, height: 960, depth: { columns: 8, rows: 6, metres: Array.from({ length: 48 }, (_, i) => (i % 9 === 0 ? -1 : 2 + (i % 5) * 0.31)) } },
+    user: data.room.user,
+    floorY: 0,
+    surfaces: entities.filter((e) => !e.virtual).map((e) => ({ id: e.id, kind: e.kind, position: e.position, size: e.size, rotation: e.rotation })),
+    props: entities.filter((e) => e.virtual).map((e) => ({ id: e.id, name: e.label, aliases: e.aliases, position: e.position, size: e.size, rotation: e.rotation, origin: e.origin, actionPoint: e.actionPoint })),
+    running: [],
+  };
 }
 
-const goodPlan = {
-  reply: "Here is the motor.",
-  chip: "Labels",
-  ops: [{
-    op: "add",
-    build: {
-      id: "labels", kind: "labels", title: "Labels", stepCount: 0, currentStep: 0,
-      elements: [{ id: "l1", type: "label", text: "Motor", step: 0, style: "neutral", scale: 1, anchor: { entity: "motor", at: "top", offset: { x: 0, y: 0, z: 0 } } }],
-    },
-  }],
-};
+const goodBuild = { reply: "That is the drive motor.", title: "Note", id: "note-motor", code: "kit.label('Drive motor', space.view.point(0.4, 0.6) || user.head.position);", remove: [], clear: false };
 
-/** A stand-in for the SDK client that records the request and returns a canned message. */
 function fakeClient(respond: (params: any, options: any) => any): { client: PlannerClient; calls: Array<{ params: any; options: any }> } {
   const calls: Array<{ params: any; options: any }> = [];
-  const client = {
-    beta: {
-      messages: {
-        create: async (params: any, options: any) => {
-          calls.push({ params, options });
-          return respond(params, options);
-        },
-      },
-    },
-  } as unknown as PlannerClient;
+  const client = { beta: { messages: { create: async (params: any, options: any) => { calls.push({ params, options }); return respond(params, options); } } } } as unknown as PlannerClient;
   return { client, calls };
 }
 
-function message(overrides: Record<string, unknown> = {}) {
+function message(body: unknown, overrides: Record<string, unknown> = {}) {
   return {
     id: "msg_1", type: "message", role: "assistant", model: "claude-opus-5-5",
-    content: [{ type: "text", text: JSON.stringify(goodPlan) }],
+    content: [{ type: "text", text: typeof body === "string" ? body : JSON.stringify(body) }],
     stop_reason: "end_turn", stop_details: null,
-    usage: { input_tokens: 120, output_tokens: 80, cache_read_input_tokens: 3000, cache_creation_input_tokens: 0 },
+    usage: { input_tokens: 900, output_tokens: 400, cache_read_input_tokens: 6000, cache_creation_input_tokens: 0 },
     ...overrides,
   };
 }
 
-// ---- schema ---------------------------------------------------------------------------------
+// ---- the API reference and the examples must be true ------------------------------------------
 
-const UNSUPPORTED = ["minimum", "maximum", "multipleOf", "minLength", "maxLength", "minItems", "maxItems", "pattern", "exclusiveMinimum", "exclusiveMaximum"];
-
-function walk(node: any, visit: (n: any, path: string) => void, at = "$"): void {
-  if (!node || typeof node !== "object") return;
-  visit(node, at);
-  if (node.properties) for (const [k, v] of Object.entries(node.properties)) walk(v, visit, `${at}.${k}`);
-  if (node.items) walk(node.items, visit, `${at}[]`);
-  if (node.anyOf) node.anyOf.forEach((v: any, i: number) => walk(v, visit, `${at}|${i}`));
-}
-
-test("schema: every object is closed and requires only declared properties", () => {
-  let objects = 0;
-  walk(PLAN_SCHEMA, (node, at) => {
-    for (const keyword of UNSUPPORTED) assert.ok(!(keyword in node), `${at} uses unsupported keyword ${keyword}`);
-    if (node.type !== "object") return;
-    objects++;
-    assert.equal(node.additionalProperties, false, `${at} must set additionalProperties: false`);
-    for (const name of node.required ?? []) assert.ok(name in node.properties, `${at} requires undeclared property ${name}`);
+test("api reference: every name it mentions exists in the runtime library", () => {
+  const names = new Set<string>();
+  for (const match of API_REFERENCE.matchAll(/\b(scene|space|kit|vec|quat|voice|user)\.([a-zA-Z]+)/g)) names.add(`${match[1]}.${match[2]}`);
+  assert.ok(names.size > 60, `expected the reference to cover the API, found ${names.size} names`);
+  const missing = [...names].filter((name) => {
+    const member = name.split(".")[1];
+    if (name === "space.view") return !library.includes("view: null");
+    if (name === "user.head") return !library.includes("get head()");
+    if (name === "scene.time") return !library.includes("get time()");
+    return !new RegExp(`\\b${member}\\s*:|get ${member}\\(`).test(library);
   });
-  assert.ok(objects > 15, `expected the walk to visit the whole schema, saw ${objects} objects`);
+  assert.deepEqual(missing, [], "names in the reference that the library does not define");
+  for (const method of ["set", "add", "remove", "worldPosition", "lookAt", "onClick", "onHover", "spin", "animate"]) {
+    assert.ok(library.includes(`Node.prototype.${method} =`), `node.${method} is documented but not defined`);
+  }
+  for (const token of ["accent", "accentDeep", "accentSoft", "warning", "success", "ink", "muted", "surface", "layer"]) {
+    assert.ok(new RegExp(`\\b${token}:`).test(library), `theme.${token} is documented but not defined`);
+  }
 });
 
-test("schema: covers every element type and anchor mode the device understands", () => {
-  const elements = (PLAN_SCHEMA as any).properties.ops.items.anyOf[0].properties.build.properties.elements.items.anyOf;
-  const types = elements.map((e: any) => e.properties.type.const).sort();
-  assert.deepEqual(types, [...ELEMENT_TYPES].sort());
-  const anchorModes = elements[0].properties.anchor.properties.at.enum;
-  assert.deepEqual([...anchorModes].sort(), [...ANCHOR_MODES].sort());
-
-  // Keep in step with the C# side: these lists are the contract.
-  const spec = readFileSync(path.join(repo, "packages/com.spatail.core/Runtime/Core/Spec/SpatialSpec.cs"), "utf8");
-  for (const type of ELEMENT_TYPES) assert.ok(spec.includes(`"${type}"`), `C# ElementType is missing "${type}"`);
-  for (const mode of ANCHOR_MODES) assert.ok(spec.includes(`"${mode}"`), `C# AnchorMode is missing "${mode}"`);
+test("examples: every program the model is shown, and every film program, runs", async () => {
+  assert.ok(context.examples.length >= 4, `expected at least four examples, got ${context.examples.length}`);
+  for (const example of context.examples) {
+    const result = await checkProgram(example.code, standInRequest(example.request));
+    assert.ok(result.ok, `example for ${JSON.stringify(example.request)} failed: ${result.error}`);
+    assert.ok(result.nodes > 0, `example for ${JSON.stringify(example.request)} built nothing`);
+  }
+  const dir = path.join(REPO_ROOT, "packages/com.spatail.core/Runtime/Resources/Spatail/Script/Examples");
+  for (const name of readdirSync(dir).filter((n) => n.endsWith(".js.txt"))) {
+    const result = await checkProgram(readFileSync(path.join(dir, name), "utf8"), standInRequest());
+    assert.ok(result.ok, `${name} failed: ${result.error}`);
+  }
 });
 
-// ---- prompt ---------------------------------------------------------------------------------
-
-test("prompt: stable serialization and no per-request content in the cached prefix", () => {
-  assert.equal(stableStringify({ b: 1, a: { d: [3, { z: 1, y: 2 }], c: 2 } }), '{"a":{"c":2,"d":[3,{"y":2,"z":1}]},"b":1}');
-  const a = sampleRequest("first question");
-  const b = sampleRequest("a different question");
-  assert.equal(knowledgeBlock(a), knowledgeBlock(b), "knowledge block must not depend on the prompt");
-  assert.ok(!SYSTEM_PROMPT.includes("first question"));
-  assert.ok(userMessage(a).includes('"first question"'));
-  assert.ok(userMessage({ ...a, focus: "gate-valve" }).includes('pointing at entity "gate-valve"'));
-  for (const type of ELEMENT_TYPES) assert.ok(SYSTEM_PROMPT.includes(`- ${type}:`), `system prompt does not describe ${type}`);
+test("check: catches programs that cannot start", async () => {
+  assert.match((await checkProgram("const x = ;")).error ?? "", /SyntaxError/);
+  assert.match((await checkProgram("scene.hologram({});")).error ?? "", /not a function/);
+  assert.match((await checkProgram("await scene.wait(0.2); space.prop('nothing').position;")).error ?? "", /null|undefined/);
+  assert.match((await checkProgram("scene.onFrame(() => { missing(); });")).error ?? "", /missing/);
+  const fine = await checkProgram("const hits = await space.find('a door'); scene.box({ size: [1, 1, 1] }); log(hits.length);");
+  assert.ok(fine.ok && fine.nodes === 1 && fine.logs.includes("info: 0"));
 });
 
-// ---- planner --------------------------------------------------------------------------------
+// ---- prompt -----------------------------------------------------------------------------------
 
-test("planner: sends the expected request and returns the plan", async () => {
-  const { client, calls } = fakeClient(() => message());
-  const { plan, usage } = await planWithClaude(client, sampleRequest());
+test("prompt: instructions are stable and carry the API, examples and knowledge", () => {
+  const a = systemPrompt(context.examples), b = systemPrompt(context.examples);
+  assert.equal(a, b);
+  assert.ok(a.includes(API_REFERENCE));
+  for (const example of context.examples) assert.ok(a.includes(JSON.stringify(example.request)));
+  assert.ok(a.includes("no menu of content types"));
+  assert.ok(!/\b20\d\d-\d\d-\d\d\b/.test(a), "no dates in the cached prefix");
+  const knowledge = knowledgeBlock(context.knowledge);
+  assert.ok(knowledge.includes("pump-p101.json") && knowledge.includes("Close this valve"));
+  assert.ok(knowledgeBlock([]).includes("no connector"));
+  assert.equal(stableStringify({ b: 1, a: [{ d: 1, c: 2 }] }), '{"a":[{"c":2,"d":1}],"b":1}');
+});
 
+test("prompt: the sensed context describes the frame, what is running and a repair", () => {
+  const request = standInRequest("make it bigger");
+  request.running = [{ id: "chart", title: "Dashboard", prompt: "show output", code: "scene.box({ size: [1, 1, 1] });" }];
+  request.repair = { code: "nope(", error: "SyntaxError: Unexpected end of input" };
+  const text = sensedContext(request);
+  assert.ok(text.includes("Depth grid (8 columns by 6 rows"));
+  assert.equal(text.split("\n").filter((l) => /^(\s*(-|\d+\.\d\d)\s*){8}$/.test(l)).length, 6, "six rows of eight distances");
+  assert.ok(text.includes('id "chart", "Dashboard"') && text.includes("scene.box"));
+  assert.ok(text.includes("Your last program for this request failed") && text.includes("Unexpected end of input"));
+  assert.ok(text.trimEnd().endsWith('The user said: "make it bigger"'), "the request comes last");
+  assert.ok(sensedContext({ prompt: "hi" }).includes("no camera frame"));
+});
+
+test("schema: closed objects, required fields declared", () => {
+  for (const schema of [BUILD_SCHEMA, LOCATE_SCHEMA]) {
+    const walk = (node: any, at: string): void => {
+      if (!node || typeof node !== "object") return;
+      for (const keyword of ["minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems", "pattern"]) assert.ok(!(keyword in node), `${at} uses ${keyword}`);
+      if (node.type === "object") {
+        assert.equal(node.additionalProperties, false, `${at} must be closed`);
+        for (const name of node.required ?? []) assert.ok(name in node.properties, `${at} requires undeclared ${name}`);
+        for (const [k, v] of Object.entries(node.properties)) walk(v, `${at}.${k}`);
+      }
+      if (node.items) walk(node.items, `${at}[]`);
+    };
+    walk(schema, "$");
+  }
+});
+
+// ---- planner ----------------------------------------------------------------------------------
+
+test("build: sends the frame, the context and the right parameters; returns the program", async () => {
+  const { client, calls } = fakeClient(() => message(goodBuild));
+  const { result, usage } = await buildWithClaude(client, standInRequest(), context);
   const { params, options } = calls[0];
   assert.equal(params.model, "claude-opus-5-5");
-  assert.equal(params.max_tokens, 16000);
   assert.deepEqual(params.betas, ["server-side-fallback-2026-07-01"]);
   assert.equal(params.fallbacks, "default");
-  assert.equal(params.output_config.effort, "low");
-  assert.equal(params.output_config.format.type, "json_schema");
-  assert.equal(params.output_config.format.schema, PLAN_SCHEMA);
+  assert.equal(params.output_config.effort, "medium");
+  assert.equal(params.output_config.format.schema, BUILD_SCHEMA);
   assert.equal(params.system.length, 2);
-  assert.deepEqual(params.system[0].cache_control, { type: "ephemeral" });
-  assert.deepEqual(params.system[1].cache_control, { type: "ephemeral" });
-  assert.equal(params.messages.length, 1);
-  assert.equal(params.messages[0].role, "user");
-  // Parameters the current models reject must not be sent.
+  for (const block of params.system) assert.deepEqual(block.cache_control, { type: "ephemeral" });
+  const content = params.messages[0].content;
+  assert.equal(content[0].type, "image");
+  assert.deepEqual(content[0].source, { type: "base64", media_type: "image/jpeg", data: "/9j/2Q==" });
+  assert.ok(content[1].text.includes("The user said"));
   for (const banned of ["temperature", "top_p", "top_k", "thinking", "tool_choice"]) assert.ok(!(banned in params), `${banned} must not be sent`);
   assert.equal(options.timeout, DEFAULT_OPTIONS.timeoutMs);
+  assert.equal(result.error, undefined);
+  assert.equal(result.builder, "claude-opus-5-5");
+  assert.equal(result.code, goodBuild.code);
+  assert.deepEqual(usage, { input: 900, cacheRead: 6000, cacheWrite: 0, output: 400 });
 
-  assert.equal(plan.error, undefined);
-  assert.equal(plan.chip, "Labels");
-  assert.equal(plan.planner, "claude-opus-5-5");
-  assert.equal(plan.ops.length, 1);
-  assert.deepEqual(usage, { input: 120, cacheRead: 3000, cacheWrite: 0, output: 80 });
+  const noFrame = fakeClient(() => message(goodBuild));
+  await buildWithClaude(noFrame.client, { prompt: "hello" }, context);
+  assert.equal(noFrame.calls[0].params.messages[0].content.length, 1, "no image block without a frame");
 });
 
-test("planner: reports the model that actually answered", async () => {
-  const { client } = fakeClient(() => message({ model: "claude-opus-4-8" }));
-  const { plan } = await planWithClaude(client, sampleRequest());
-  assert.equal(plan.planner, "claude-opus-4-8");
+test("build: fenced code is unwrapped; refusals, truncation and bad output become errors", async () => {
+  let { result } = await buildWithClaude(fakeClient(() => message({ ...goodBuild, code: "```js\nscene.box({ size: [1, 1, 1] });\n```" })).client, standInRequest(), context);
+  assert.equal(result.code, "scene.box({ size: [1, 1, 1] });");
+  ({ result } = await buildWithClaude(fakeClient(() => message("", { stop_reason: "refusal", stop_details: { type: "refusal", category: "cyber" }, content: [] })).client, standInRequest(), context));
+  assert.match(result.error ?? "", /refused \(cyber\)/);
+  assert.equal(result.code, "");
+  ({ result } = await buildWithClaude(fakeClient(() => message('{"reply":"x","code":"scene.', { stop_reason: "max_tokens" })).client, standInRequest(), context));
+  assert.match(result.error ?? "", /max_tokens/);
+  ({ result } = await buildWithClaude(fakeClient(() => message("Sure! Here you go.")).client, standInRequest(), context));
+  assert.match(result.error ?? "", /not valid JSON/);
+  assert.equal(normalizeBuild({ answer: 42 }), null);
+  assert.deepEqual(normalizeBuild({ reply: "Removed.", remove: ["a", 3], clear: "yes" }), { reply: "Removed.", title: "", id: "", code: "", remove: ["a"], clear: false });
 });
 
-test("planner: refusal, truncation and bad output become errors the device can show", async () => {
-  const refusal = fakeClient(() => message({ stop_reason: "refusal", stop_details: { type: "refusal", category: "cyber", explanation: "" }, content: [] }));
-  let { plan } = await planWithClaude(refusal.client, sampleRequest());
-  assert.match(plan.error ?? "", /refused \(cyber\)/);
-  assert.equal(plan.ops.length, 0);
-  assert.ok(plan.reply.length > 0);
-
-  const truncated = fakeClient(() => message({ stop_reason: "max_tokens", content: [{ type: "text", text: '{"reply":"x","ops":[' }] }));
-  ({ plan } = await planWithClaude(truncated.client, sampleRequest()));
-  assert.match(plan.error ?? "", /max_tokens/);
-
-  const garbage = fakeClient(() => message({ content: [{ type: "text", text: "Sure! Here you go." }] }));
-  ({ plan } = await planWithClaude(garbage.client, sampleRequest()));
-  assert.match(plan.error ?? "", /not valid JSON/);
-
-  const wrongShape = fakeClient(() => message({ content: [{ type: "text", text: '{"answer":42}' }] }));
-  ({ plan } = await planWithClaude(wrongShape.client, sampleRequest()));
-  assert.match(plan.error ?? "", /plan shape/);
-});
-
-test("planner: API errors map to distinct, non-throwing outcomes", async () => {
+test("build: API errors map to distinct outcomes; bugs surface", async () => {
   const headers = new Headers();
   const cases: Array<[Error, RegExp]> = [
     [new Anthropic.AuthenticationError(401, undefined, "bad key", headers), /authentication failed/],
@@ -174,95 +193,111 @@ test("planner: API errors map to distinct, non-throwing outcomes", async () => {
     [new Anthropic.APIConnectionError({ message: "offline" }), /connection error/],
   ];
   for (const [error, expected] of cases) {
-    const { client } = fakeClient(() => { throw error; });
-    const { plan, usage } = await planWithClaude(client, sampleRequest());
-    assert.match(plan.error ?? "", expected);
-    assert.equal(usage, undefined);
-    assert.ok(plan.reply.length > 0);
+    const { result } = await buildWithClaude(fakeClient(() => { throw error; }).client, standInRequest(), context);
+    assert.match(result.error ?? "", expected);
+    assert.ok(result.reply.length > 0);
   }
-  // Anything that is not an API error is a bug and must surface.
-  const { client } = fakeClient(() => { throw new TypeError("bug"); });
-  await assert.rejects(planWithClaude(client, sampleRequest()), TypeError);
+  await assert.rejects(buildWithClaude(fakeClient(() => { throw new TypeError("bug"); }).client, standInRequest(), context), TypeError);
 });
 
-test("normalizePlan: keeps valid ops, drops malformed ones", () => {
-  const plan = normalizePlan({
-    reply: "ok", chip: 7,
-    ops: [goodPlan.ops[0], { op: "teleport" }, { op: "remove" }, { op: "remove", buildId: "x" }, { op: "add" }, { op: "clear" }, null, { op: "step", buildId: "w", step: 2 }],
+test("locate: asks about one frame, clamps what comes back", async () => {
+  const { client, calls } = fakeClient(() => message({ points: [{ u: 0.4, v: 1.3, label: "valve" }, { u: "x" }, { u: 0.1, v: 0.2 }] }));
+  const { result } = await locateWithClaude(client, { query: "the valve", image: "/9j/2Q==" });
+  assert.deepEqual(result.points, [{ u: 0.4, v: 1, label: "valve" }, { u: 0.1, v: 0.2, label: "the valve" }]);
+  const params = calls[0].params;
+  assert.equal(params.output_config.format.schema, LOCATE_SCHEMA);
+  assert.equal(params.messages[0].content[0].type, "image");
+  assert.ok(params.messages[0].content[1].text.includes('"the valve"'));
+  const failed = await locateWithClaude(fakeClient(() => { throw new Anthropic.RateLimitError(429, undefined, "x", new Headers()); }).client, { query: "q", image: "x" });
+  assert.deepEqual(failed.result, { points: [], error: "rate limited" });
+});
+
+// ---- server -----------------------------------------------------------------------------------
+
+async function withServer(config: Partial<Parameters<typeof createPlannerServer>[0]>, run: (base: string) => Promise<void>): Promise<void> {
+  const server = createPlannerServer({
+    log: () => {},
+    build: async () => ({ result: { ...goodBuild, builder: "claude-opus-5-5", latencyMs: 5 } }),
+    locate: async () => ({ result: { points: [{ u: 0.5, v: 0.5, label: "door" }] } }),
+    ...config,
   });
-  assert.ok(plan);
-  assert.equal(plan.chip, "");
-  assert.deepEqual(plan.ops.map((o) => o.op), ["add", "remove", "clear", "step"]);
-  assert.equal(normalizePlan([]), null);
-  assert.equal(normalizePlan({ reply: "x" }), null);
-  assert.equal(normalizePlan("nope"), null);
-});
-
-// ---- server ---------------------------------------------------------------------------------
-
-async function withServer(config: Parameters<typeof createPlannerServer>[0], run: (base: string) => Promise<void>): Promise<void> {
-  const server = createPlannerServer({ log: () => {}, ...config });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
-  try {
-    await run(`http://127.0.0.1:${port}`);
-  } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-  }
+  try { await run(`http://127.0.0.1:${port}`); } finally { await new Promise<void>((resolve) => server.close(() => resolve())); }
 }
 
-const post = (base: string, body: unknown, headers: Record<string, string> = {}) =>
-  fetch(`${base}/v1/plan`, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
+const post = (url: string, body: unknown, headers: Record<string, string> = {}) =>
+  fetch(url, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
 
-test("server: plans a request end to end and validates input", async () => {
-  const seen: PlanRequest[] = [];
-  await withServer({
-    plan: async (request) => { seen.push(request); return { plan: { ...goodPlan, planner: "claude-opus-5-5", latencyMs: 5 } as any }; },
-    describe: () => ({ model: "claude-opus-5-5" }),
-  }, async (base) => {
-    const health = await fetch(`${base}/healthz`);
-    assert.deepEqual(await health.json(), { ok: true, model: "claude-opus-5-5" });
-
-    const ok = await post(base, sampleRequest("label the motor"));
+test("server: build and locate end to end, with validation", async () => {
+  const seen: BuildRequest[] = [];
+  await withServer({ build: async (request) => { seen.push(request); return { result: { ...goodBuild } }; }, describe: () => ({ model: "claude-opus-5-5" }) }, async (base) => {
+    assert.deepEqual(await (await fetch(`${base}/healthz`)).json(), { ok: true, model: "claude-opus-5-5" });
+    const ok = await post(`${base}/v1/build`, standInRequest("what is this?"));
     assert.equal(ok.status, 200);
-    const plan = await ok.json() as any;
-    assert.equal(plan.chip, "Labels");
-    assert.equal(seen[0].prompt, "label the motor");
-    assert.equal(seen[0].room.entities.length, 14);
+    assert.equal(((await ok.json()) as any).title, "Note");
+    assert.equal(seen[0].prompt, "what is this?");
+    assert.equal(seen[0].view?.depth?.metres.length, 48);
+    assert.equal((await post(`${base}/v1/build`, "{nope")).status, 400);
+    assert.equal((await post(`${base}/v1/build`, { image: "x" })).status, 400);
+    assert.equal((await post(`${base}/v1/build`, { prompt: "x", image: 5 })).status, 400);
+    assert.equal((await fetch(`${base}/v1/build`)).status, 405);
+    assert.equal((await fetch(`${base}/v1/nope`)).status, 404);
 
-    assert.equal((await post(base, "{not json")).status, 400);
-    assert.equal((await post(base, { room: { entities: [] } })).status, 400);
-    assert.equal((await post(base, { prompt: "hi" })).status, 400);
-    assert.equal((await post(base, { prompt: "hi", room: { entities: [] }, builds: "no" })).status, 400);
-    assert.equal((await fetch(`${base}/v1/plan`)).status, 405);
-    assert.equal((await fetch(`${base}/nope`)).status, 404);
+    const located = await post(`${base}/v1/locate`, { query: "the door", image: "/9j/2Q==" });
+    assert.deepEqual(await located.json(), { points: [{ u: 0.5, v: 0.5, label: "door" }] });
+    assert.equal((await post(`${base}/v1/locate`, { query: "the door" })).status, 400);
   });
 });
 
-test("server: enforces the bearer token when one is configured", async () => {
-  await withServer({ token: "s3cret", plan: async () => ({ plan: goodPlan as any }) }, async (base) => {
-    assert.equal((await post(base, sampleRequest())).status, 401);
-    assert.equal((await post(base, sampleRequest(), { Authorization: "Bearer wrong" })).status, 401);
-    assert.equal((await post(base, sampleRequest(), { Authorization: "Bearer s3cret" })).status, 200);
+test("server: token, planner failure and crashes", async () => {
+  await withServer({ token: "s3cret" }, async (base) => {
+    assert.equal((await post(`${base}/v1/build`, standInRequest())).status, 401);
+    assert.equal((await post(`${base}/v1/locate`, { query: "q", image: "i" }, { Authorization: "Bearer wrong" })).status, 401);
+    assert.equal((await post(`${base}/v1/build`, standInRequest(), { Authorization: "Bearer s3cret" })).status, 200);
     assert.equal((await fetch(`${base}/healthz`)).status, 200);
   });
-});
-
-test("server: a planner failure is a 200 with the error for the device, a crash is a 500", async () => {
-  await withServer({ plan: async () => ({ plan: { reply: "The planner is busy right now.", chip: "", ops: [], error: "rate limited" } }) }, async (base) => {
-    const response = await post(base, sampleRequest());
+  await withServer({ build: async () => ({ result: { reply: "The planner is busy right now.", title: "", id: "", code: "", remove: [], clear: false, error: "rate limited" } }) }, async (base) => {
+    const response = await post(`${base}/v1/build`, standInRequest());
     assert.equal(response.status, 200);
-    assert.equal((await response.json() as any).error, "rate limited");
+    assert.equal(((await response.json()) as any).error, "rate limited");
   });
-  await withServer({ plan: async () => { throw new Error("bug"); } }, async (base) => {
-    assert.equal((await post(base, sampleRequest())).status, 500);
+  await withServer({ build: async () => { throw new Error("bug"); } }, async (base) => {
+    assert.equal((await post(`${base}/v1/build`, standInRequest())).status, 500);
   });
 });
 
-test("server: options come from the environment", () => {
+test("server: saves episodes and serves the lab from one directory only", async () => {
+  const episodes = mkdtempSync(path.join(tmpdir(), "spatail-episodes-"));
+  const lab = mkdtempSync(path.join(tmpdir(), "spatail-lab-"));
+  writeFileSync(path.join(lab, "index.html"), "<p>lab</p>");
+  writeFileSync(path.join(path.dirname(lab), "secret.txt"), "no");
+  await withServer({ episodesDir: episodes, labDir: lab }, async (base) => {
+    const saved = await post(`${base}/v1/episodes`, { request: standInRequest("How far is the door?"), result: goodBuild });
+    assert.equal(saved.status, 200);
+    const name = ((await saved.json()) as any).saved as string;
+    assert.match(name, /how-far-is-the-door\.json$/);
+    assert.equal(JSON.parse(readFileSync(path.join(episodes, name), "utf8")).request.prompt, "How far is the door?");
+    assert.equal((await post(`${base}/v1/episodes`, { result: goodBuild })).status, 400);
+
+    const page = await fetch(`${base}/lab/`);
+    assert.equal(page.status, 200);
+    assert.equal(await page.text(), "<p>lab</p>");
+    assert.equal((await fetch(`${base}/lab/missing.js`)).status, 404);
+    assert.notEqual((await fetch(`${base}/lab/..%2Fsecret.txt`)).status, 200);
+    assert.equal((await fetch(base, { redirect: "manual" })).status, 302);
+  });
+  await withServer({}, async (base) => {
+    assert.equal((await post(`${base}/v1/episodes`, { request: standInRequest() })).status, 404);
+    assert.equal((await fetch(`${base}/lab/`)).status, 404);
+  });
+});
+
+test("server: options and context come from the environment and the repo", () => {
   assert.deepEqual(optionsFromEnv({}), DEFAULT_OPTIONS);
-  const custom = optionsFromEnv({ SPATAIL_MODEL: "claude-sonnet-5-5", SPATAIL_EFFORT: "medium" });
-  assert.equal(custom.model, "claude-sonnet-5-5");
-  assert.equal(custom.effort, "medium");
+  assert.equal(optionsFromEnv({ SPATAIL_MODEL: "claude-sonnet-5-5", SPATAIL_EFFORT: "low" }).model, "claude-sonnet-5-5");
   assert.throws(() => optionsFromEnv({ SPATAIL_EFFORT: "extreme" }));
+  assert.ok(existsSync(path.join(SERVICE_ROOT, "package.json")));
+  assert.ok(context.examples.some((e) => e.request.includes("walkthrough")) && context.examples.some((e) => e.request.includes("exclusion zone")));
+  assert.equal(loadContext({ SPATAIL_KNOWLEDGE_DIR: path.join(tmpdir(), "nothing-here") }).knowledge.length, 0);
 });
