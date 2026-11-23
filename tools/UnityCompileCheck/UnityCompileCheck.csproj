@@ -13,12 +13,17 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <DefineConstants>UNITY_2021_3_OR_NEWER;UNITY_EDITOR;ENABLE_LEGACY_INPUT_MANAGER</DefineConstants>
+    <!-- Pass -p:InputSystemDll=/path/to/Unity.InputSystem.dll to check the Input System code path instead of the legacy one. -->
+    <DefineConstants Condition="'$(InputSystemDll)' == ''">UNITY_2021_3_OR_NEWER;UNITY_EDITOR;ENABLE_LEGACY_INPUT_MANAGER</DefineConstants>
+    <DefineConstants Condition="'$(InputSystemDll)' != ''">UNITY_2021_3_OR_NEWER;UNITY_EDITOR;ENABLE_INPUT_SYSTEM;SPATAIL_INPUT_SYSTEM</DefineConstants>
     <NoWarn>CS0649;CS0414;NU1701</NoWarn>
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(InputSystemDll)' != ''">
+    <Reference Include="Unity.InputSystem"><HintPath>$(InputSystemDll)</HintPath></Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../packages/com.spatail.core/Runtime/Core/**/*.cs" LinkBase="Core" />

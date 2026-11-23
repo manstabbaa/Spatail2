@@ -108,6 +108,10 @@
       "chip": "Walkthrough",
       "ops": [
         {
+          "op": "remove",
+          "buildId": "labels"
+        },
+        {
           "op": "add",
           "build": {
             "id": "walkthrough",
@@ -214,7 +218,7 @@
         }
       ],
       "planner": "offline",
-      "latencyMs": 4
+      "latencyMs": 8
     },
     "placements": {
       "walkthrough/pin-1": {
@@ -224,8 +228,8 @@
         "pivotBottom": true
       },
       "walkthrough/card-1": {
-        "position": [-0.7424, 1.16, 0.52],
-        "rotation": [0.0734, -0.1442, 0.0107, 0.9868],
+        "position": [-0.7424, 1.085, 0.52],
+        "rotation": [0.0856, -0.1441, 0.0125, 0.9858],
         "target": [-0.85, 1.2, 0.88],
         "pivotBottom": false
       },
@@ -242,16 +246,16 @@
         "pivotBottom": true
       },
       "walkthrough/card-2": {
-        "position": [0.6389, 0.6, -0.2033],
-        "rotation": [0.213, 0.1225, -0.0269, 0.969],
+        "position": [0.6389, 0.51, -0.2033],
+        "rotation": [0.2293, 0.1221, -0.029, 0.9652],
         "target": [0.74, 0.64, 0.19],
         "pivotBottom": false
       },
       "walkthrough/gizmo-2": {
-        "position": [0.74, 0.9, 0.19],
+        "position": [0.74, 0.85, 0.19],
         "rotation": [0, 0, 0, 1],
-        "target": [0.74, 0.9, 0.19],
-        "pivotBottom": true
+        "target": [0.74, 0.85, 0.19],
+        "pivotBottom": false
       },
       "walkthrough/pin-3": {
         "position": [0.08, 0.6, 0.19],
@@ -260,8 +264,8 @@
         "pivotBottom": true
       },
       "walkthrough/card-3": {
-        "position": [0.0831, 0.43, -0.191],
-        "rotation": [0.2505, -0.0039, 0.001, 0.9681],
+        "position": [0.0831, 0.405, -0.191],
+        "rotation": [0.2549, -0.0039, 0.001, 0.967],
         "target": [0.08, 0.47, 0.19],
         "pivotBottom": false
       },
@@ -310,7 +314,7 @@
   {
     "prompt": "Show me how the water flows",
     "plan": {
-      "reply": "In at the inlet, up and out at the outlet. Running at 42 m3/h.",
+      "reply": "In at the inlet, up and out at the outlet. Running at 42 m³/h.",
       "chip": "Live flow",
       "ops": [
         {
@@ -327,7 +331,7 @@
                   "entity": "pump-p101",
                   "at": "center"
                 },
-                "text": "42 m3/h",
+                "text": "42 m³/h",
                 "points": [
                   [1.3, 0.46, 0],
                   [0.2, 0.46, 0],
@@ -409,7 +413,7 @@
                 },
                 "style": "warning",
                 "title": "Bearing over-temperature",
-                "body": "6 days ago - 82 C at the drive-end bearing; tripped on thermal overload."
+                "body": "6 days ago - 82 °C at the drive-end bearing; tripped on thermal overload."
               },
               {
                 "id": "fault-pin-1",
@@ -486,8 +490,8 @@
         "pivotBottom": true
       },
       "faults/fault-title": {
-        "position": [-0.299, 0.57, -0.3132],
-        "rotation": [0.2318, -0.0962, 0.023, 0.9677],
+        "position": [-0.299, 0.485, -0.3132],
+        "rotation": [0.2476, -0.0958, 0.0246, 0.9638],
         "target": [-0.4, 0.49, 0.19],
         "pivotBottom": false
       }
@@ -515,14 +519,14 @@
                 },
                 "title": "Output this month",
                 "values": [38, 44, 41, 52, 49, 61, 58, 66, 78, 86],
-                "unit": "x100 m3"
+                "unit": "×100 m³"
               }
             ]
           }
         }
       ],
       "planner": "offline",
-      "latencyMs": 5
+      "latencyMs": 9
     },
     "placements": {
       "dashboard/chart-output": {
@@ -651,7 +655,7 @@
                 "scale": 1.35,
                 "title": "Output this month",
                 "values": [38, 44, 41, 52, 49, 61, 58, 66, 78, 86],
-                "unit": "x100 m3"
+                "unit": "×100 m³"
               }
             ]
           }
@@ -692,7 +696,7 @@
                 "scale": 1.35,
                 "title": "Output this month",
                 "values": [38, 44, 41, 52, 49, 61, 58, 66, 78, 86],
-                "unit": "x100 m3"
+                "unit": "×100 m³"
               }
             ]
           }
@@ -750,8 +754,8 @@
     },
     "placements": {
       "note/note-gate-valve": {
-        "position": [0.6389, 0.6, -0.2033],
-        "rotation": [0.213, 0.1225, -0.0269, 0.969],
+        "position": [0.6389, 0.51, -0.2033],
+        "rotation": [0.2293, 0.1221, -0.029, 0.9652],
         "target": [0.74, 0.64, 0.19],
         "pivotBottom": false
       },

@@ -78,6 +78,8 @@ namespace Spatail.Core
                 size = part.size,
                 localCenter = part.center,
                 actionAxis = part.actionAxis,
+                actionOffset = part.hasActionPoint ? part.actionPoint - part.center : Vec3.Zero,
+                hasActionPoint = part.hasActionPoint,
                 scanLabel = part.scanLabel,
                 shapes = part.shapes,
                 isVirtual = true,

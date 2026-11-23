@@ -103,6 +103,12 @@ namespace Spatail
         public SpatailApp App;
         float _yaw, _pitch = 14f;
 
+        static readonly string[] Demo =
+        {
+            "Build me a walkthrough for this pump", "Show me how the water flows", "Has it failed before?",
+            "Put this month's output by the bench", "What parts do I need?", "Bring Sara in",
+        };
+
         void Start()
         {
             Vector3 e = transform.eulerAngles;
@@ -113,44 +119,32 @@ namespace Spatail
         /// <summary>Degrees of yaw to apply to the station this frame (Z / X keys).</summary>
         public static float StationRotate()
         {
-#if ENABLE_LEGACY_INPUT_MANAGER
-            float dir = (Input.GetKey(KeyCode.X) ? 1f : 0f) - (Input.GetKey(KeyCode.Z) ? 1f : 0f);
+            float dir = (InputBridge.KeyHeld(SimKey.X) ? 1f : 0f) - (InputBridge.KeyHeld(SimKey.Z) ? 1f : 0f);
             return dir * 90f * Time.unscaledDeltaTime;
-#else
-            return 0f;
-#endif
         }
 
         void Update()
         {
-#if ENABLE_LEGACY_INPUT_MANAGER
-            if (Input.GetMouseButton(1))
+            if (InputBridge.MouseButton(1))
             {
-                _yaw += Input.GetAxis("Mouse X") * 3f;
-                _pitch = Mathf.Clamp(_pitch - Input.GetAxis("Mouse Y") * 3f, -80f, 80f);
+                Vector2 delta = InputBridge.MouseDelta;
+                _yaw += delta.x * 0.18f;
+                _pitch = Mathf.Clamp(_pitch - delta.y * 0.18f, -80f, 80f);
                 transform.rotation = Quaternion.Euler(_pitch, _yaw, 0f);
 
                 var move = new Vector3(
-                    (Input.GetKey(KeyCode.D) ? 1f : 0f) - (Input.GetKey(KeyCode.A) ? 1f : 0f),
-                    (Input.GetKey(KeyCode.E) ? 1f : 0f) - (Input.GetKey(KeyCode.Q) ? 1f : 0f),
-                    (Input.GetKey(KeyCode.W) ? 1f : 0f) - (Input.GetKey(KeyCode.S) ? 1f : 0f));
-                float speed = Input.GetKey(KeyCode.LeftShift) ? 4f : 1.6f;
+                    (InputBridge.KeyHeld(SimKey.D) ? 1f : 0f) - (InputBridge.KeyHeld(SimKey.A) ? 1f : 0f),
+                    (InputBridge.KeyHeld(SimKey.E) ? 1f : 0f) - (InputBridge.KeyHeld(SimKey.Q) ? 1f : 0f),
+                    (InputBridge.KeyHeld(SimKey.W) ? 1f : 0f) - (InputBridge.KeyHeld(SimKey.S) ? 1f : 0f));
+                float speed = InputBridge.KeyHeld(SimKey.Shift) ? 4f : 1.6f;
                 transform.position += transform.rotation * move * (speed * Time.unscaledDeltaTime);
             }
-            float scroll = Input.mouseScrollDelta.y;
+            float scroll = InputBridge.Scroll;
             if (Mathf.Abs(scroll) > 0.01f) transform.position += transform.forward * (scroll * 0.15f);
 
-            if (App != null && App.PromptBar != null)
-            {
-                string[] demo =
-                {
-                    "Build me a walkthrough for this pump", "Show me how the water flows", "Has it failed before?",
-                    "Put this month's output by the bench", "What parts do I need?", "Bring Sara in",
-                };
-                for (int i = 0; i < demo.Length; i++)
-                    if (Input.GetKeyDown(KeyCode.F1 + i)) App.Submit(demo[i]);
-            }
-#endif
+            if (App != null)
+                for (int i = 0; i < Demo.Length; i++)
+                    if (InputBridge.KeyPressed(SimKey.F1 + i)) App.Submit(Demo[i]);
         }
     }
 
@@ -161,28 +155,16 @@ namespace Spatail
 
         public override bool TryGetRay(out Ray ray)
         {
-#if ENABLE_LEGACY_INPUT_MANAGER
-            if (Camera != null)
+            if (Camera != null && InputBridge.HasMouse)
             {
-                ray = Camera.ScreenPointToRay(Input.mousePosition);
+                ray = Camera.ScreenPointToRay(InputBridge.MousePosition);
                 return true;
             }
-#endif
             ray = default(Ray);
             return false;
         }
 
-        public override bool IsPressed
-        {
-            get
-            {
-#if ENABLE_LEGACY_INPUT_MANAGER
-                return Input.GetMouseButton(0);
-#else
-                return false;
-#endif
-            }
-        }
+        public override bool IsPressed => InputBridge.MouseButton(0);
     }
 
     /// <summary>Typing on a physical keyboard. Starts by itself when a letter is pressed, so prompts can just be typed.</summary>
@@ -209,23 +191,23 @@ namespace Spatail
 
         void Update()
         {
-#if ENABLE_LEGACY_INPUT_MANAGER
             // Leave the keyboard to the fly camera while the right mouse button is held.
-            if (Input.GetMouseButton(1)) return;
-            string input = Input.inputString;
-            if (string.IsNullOrEmpty(input) && !(IsOpen && Input.GetKeyDown(KeyCode.Escape))) return;
+            if (InputBridge.MouseButton(1)) return;
+            string input = InputBridge.TypedThisFrame;
+            bool escape = InputBridge.KeyPressed(SimKey.Escape);
+            if (string.IsNullOrEmpty(input) && !(IsOpen && escape)) return;
 
             if (!IsOpen)
             {
                 // The first printable character opens the prompt bar.
                 bool printable = false;
-                foreach (char c in input) if (c >= ' ' && c != 127) printable = true;
+                foreach (char c in input) if (c > ' ' && c != 127) printable = true;
                 if (!printable || App == null || App.PromptBar == null || App.State != AppState.Ready) return;
                 App.PromptBar.BeginTyping();
                 if (!IsOpen) return;
             }
 
-            if (Input.GetKeyDown(KeyCode.Escape))
+            if (escape)
             {
                 IsOpen = false;
                 if (_onCancel != null) _onCancel();
@@ -245,13 +227,12 @@ namespace Spatail
                     if (_onSubmit != null) _onSubmit(submitted);
                     return;
                 }
-                else if (c >= ' ')
+                else if (c >= ' ' && c != 127)
                 {
                     _text += c;
                 }
             }
             if (_onChanged != null) _onChanged(_text);
-#endif
         }
     }
 }

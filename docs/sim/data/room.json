@@ -285,7 +285,7 @@
       "rotation": [0, 0, 0, 1],
       "size": [0.3, 0.62, 0.5],
       "aliases": ["casing", "volute", "pump casing", "impeller", "pump head"],
-      "about": "End-suction centrifugal pump. Rated 42 m3/h at 32 m head.",
+      "about": "End-suction centrifugal pump. Rated 42 m³/h at 32 m head.",
       "parent": "pump-p101",
       "virtual": true,
       "shapeOrigin": [0.1, 0, 0.19],
@@ -393,6 +393,7 @@
       "parent": "pump-p101",
       "virtual": true,
       "actionAxis": [0, 1, 0],
+      "actionOffset": [0, 0.21, 0],
       "shapeOrigin": [0.1, 0, 0.19],
       "scanLabel": true,
       "shapes": [

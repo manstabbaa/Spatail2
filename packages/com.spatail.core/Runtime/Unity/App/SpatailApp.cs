@@ -307,12 +307,7 @@ namespace Spatail
         public void Apply(PlanResult plan)
         {
             if (plan == null) return;
-            // The scan labels make way for real content, as they do in the reference animation.
-            bool addsContent = false;
-            foreach (PlanOp op in plan.ops)
-                if (op.op == OpType.Add && op.build != null && op.build.kind != BuildKind.Labels) addsContent = true;
-            if (addsContent && Store.Get(BuildKind.Labels) != null) Store.Remove(BuildKind.Labels);
-
+            Store.RetireScanLabels(plan);
             Store.Apply(plan);
             if (!_suppressBroadcast && Session.IsActive && plan.ops.Count > 0) Session.SendPlan(plan);
         }

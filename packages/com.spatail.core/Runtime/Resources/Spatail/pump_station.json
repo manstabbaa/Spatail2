@@ -73,7 +73,7 @@
         "label": "Pump",
         "aliases": ["casing", "volute", "pump casing", "impeller", "pump head"],
         "scanLabel": true,
-        "about": "End-suction centrifugal pump. Rated 42 m3/h at 32 m head.",
+        "about": "End-suction centrifugal pump. Rated 42 m³/h at 32 m head.",
         "center": [0.22, 0.5, 0],
         "size": [0.3, 0.62, 0.5],
         "shapes": [
@@ -110,6 +110,7 @@
         "center": [0.64, 0.64, 0],
         "size": [0.24, 0.52, 0.24],
         "actionAxis": [0, 1, 0],
+        "actionPoint": [0.64, 0.85, 0],
         "shapes": [
           {"t": "cyl", "p": [0.55, 0.46, 0], "s": [0.105, 0.025, 0], "r": [0, 0, 90], "tone": "shade"},
           {"t": "cyl", "p": [0.73, 0.46, 0], "s": [0.105, 0.025, 0], "r": [0, 0, 90], "tone": "shade"},
@@ -231,7 +232,7 @@
         "id": "process-water",
         "title": "Process water",
         "medium": "water",
-        "rate": "42 m3/h",
+        "rate": "42 m³/h",
         "aliases": ["water", "flow", "process water"],
         "path": [[1.3, 0.46, 0], [0.2, 0.46, 0], [0.2, 1.26, 0]],
         "radius": 0.075,
@@ -243,12 +244,12 @@
     "faults": {
       "title": "Last week's faults",
       "records": [
-        {"entity": "motor", "title": "Bearing over-temperature", "when": "6 days ago", "severity": "high", "detail": "82 C at the drive-end bearing; tripped on thermal overload."},
+        {"entity": "motor", "title": "Bearing over-temperature", "when": "6 days ago", "severity": "high", "detail": "82 °C at the drive-end bearing; tripped on thermal overload."},
         {"entity": "coupling", "title": "Vibration alarm", "when": "4 days ago", "severity": "medium", "detail": "7.1 mm/s RMS; misalignment suspected."}
       ]
     },
     "metrics": [
-      {"id": "output", "title": "Output this month", "unit": "x100 m3", "aliases": ["output", "production", "throughput", "volume"], "values": [38, 44, 41, 52, 49, 61, 58, 66, 78, 86]},
+      {"id": "output", "title": "Output this month", "unit": "×100 m³", "aliases": ["output", "production", "throughput", "volume"], "values": [38, 44, 41, 52, 49, 61, 58, 66, 78, 86]},
       {"id": "energy", "title": "Energy this month", "unit": "kWh", "aliases": ["energy", "power", "consumption", "electricity"], "values": [120, 118, 124, 131, 127, 140, 138, 142, 151, 149]}
     ],
     "spares": {

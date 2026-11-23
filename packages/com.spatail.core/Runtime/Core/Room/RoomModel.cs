@@ -46,6 +46,11 @@ namespace Spatail.Core
         public bool isVirtual;
         /// <summary>Preferred axis for rotate/turn gizmos, in entity-local space. Zero when not applicable.</summary>
         public Vec3 actionAxis;
+        /// <summary>Where the action happens relative to the centre of the bounds, in entity-local space.</summary>
+        public Vec3 actionOffset;
+        public bool hasActionPoint;
+        /// <summary>World position gizmos should centre on: the action point when known, else the top of the bounds.</summary>
+        public Vec3 ActionPoint => hasActionPoint ? WorldPoint(actionOffset) : TopCenter;
         /// <summary>Centre of the bounds inside the frame the hologram shapes were authored in.</summary>
         public Vec3 localCenter;
         /// <summary>Stand-in hologram geometry, or null when the entity is a real object. Not serialized.</summary>
@@ -91,6 +96,7 @@ namespace Spatail.Core
             if (!string.IsNullOrEmpty(parentId)) o["parent"] = parentId;
             if (isVirtual) o["virtual"] = true;
             if (actionAxis.SqrLength > 0) o["actionAxis"] = Json.FromVec3(actionAxis);
+            if (hasActionPoint) o["actionOffset"] = Json.FromVec3(actionOffset);
             return o;
         }
 
@@ -107,6 +113,8 @@ namespace Spatail.Core
                 parentId = o.Str("parent"),
                 isVirtual = o.Bool("virtual"),
                 actionAxis = o.Vec("actionAxis"),
+                actionOffset = o.Vec("actionOffset"),
+                hasActionPoint = o.Has("actionOffset"),
                 aliases = o.StrList("aliases"),
             };
             var r = o.Arr("rotation");

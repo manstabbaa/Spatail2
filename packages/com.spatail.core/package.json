@@ -1,0 +1,17 @@
+{
+  "name": "com.spatail.core",
+  "version": "0.1.0",
+  "displayName": "Spatail Core",
+  "description": "Spatail's shared runtime: the room model, the spatial content spec, the layout solver, planners, and the renderers that put AI-built content into a room. Used by the Meta Quest app and the iOS dev tool.",
+  "unity": "6000.0",
+  "author": {
+    "name": "Spatail"
+  },
+  "dependencies": {
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.imageconversion": "1.0.0",
+    "com.unity.modules.unitywebrequest": "1.0.0",
+    "com.unity.modules.imgui": "1.0.0",
+    "com.unity.modules.audio": "1.0.0"
+  }
+}

@@ -82,7 +82,8 @@ namespace Spatail.Core
                 {
                     float reach = entity.ExtentAlong(toUser) + 0.26f;
                     Vec3 p = entity.position + toUser * reach;
-                    p.y = Clamp(entity.position.y - 0.04f, room.floorY + 0.35f, room.floorY + 1.5f);
+                    // Sit below the part's centre so the card does not cover the thing it is about.
+                    p.y = Clamp(entity.position.y - entity.size.y * 0.25f, room.floorY + 0.35f, room.floorY + 1.5f);
                     result.position = p + offsetWorld;
                     result.rotation = FaceUser(result.position, room, 35f);
                     break;
@@ -130,6 +131,10 @@ namespace Spatail.Core
                 // Gizmos align their local +Y with the part's action axis instead of facing the user.
                 Vec3 axis = entity.actionAxis.SqrLength > 0 ? entity.rotation * entity.actionAxis : Vec3.Up;
                 result.rotation = Quat.FromTo(Vec3.Up, axis);
+                // Centre on where the action happens (the handwheel), not just the top of the bounds.
+                result.position = entity.ActionPoint + offsetWorld;
+                result.target = result.position;
+                result.pivotBottom = false;
             }
             return result;
         }

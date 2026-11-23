@@ -48,6 +48,9 @@ namespace Spatail.Core
         public Vec3 center;
         public Vec3 size;
         public Vec3 actionAxis;
+        /// <summary>Where on the part the action happens (a handwheel, a button), in the shape frame. Optional.</summary>
+        public Vec3 actionPoint;
+        public bool hasActionPoint;
         /// <summary>Whether the room scan announces this part with a label.</summary>
         public bool scanLabel;
         public List<ShapeDef> shapes = new List<ShapeDef>();
@@ -69,6 +72,8 @@ namespace Spatail.Core
                 center = o.Vec("center"),
                 size = o.Vec("size"),
                 actionAxis = o.Vec("actionAxis"),
+                actionPoint = o.Vec("actionPoint"),
+                hasActionPoint = o.Has("actionPoint"),
                 scanLabel = o.Bool("scanLabel"),
                 mount = o.Str("mount", ""),
                 offset = o.Vec("offset"),

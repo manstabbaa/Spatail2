@@ -219,7 +219,6 @@ namespace Spatail
 
             var spinner = new GameObject("Spinner");
             spinner.transform.SetParent(Content, false);
-            spinner.transform.localPosition = new Vector3(0, 0.03f, 0);
             _spinner = spinner.transform;
 
             const float arc = 250f, tube = 0.011f;

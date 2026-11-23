@@ -73,6 +73,9 @@ namespace Spatail.Core.Tests
             Run("Layout: flow path follows the pipework", LayoutFlow);
             Run("Layout: wall anchor sits on the wall facing the room", LayoutWall);
             Run("BuildStore applies ops and raises events", StoreOps);
+            Run("Scan labels retire when real content arrives", LabelsRetire);
+            Run("Layout: turn arrow centres on the handwheel", LayoutGizmo);
+            Run("Offline planner: 'what is this' uses the pointed-at entity", PlanFocus);
             Run("Remote planner: request shape, success and failure", RemotePlannerPaths);
             Run("Planner router falls back when the service fails", RouterFallback);
             Run("Session link: plans, prompts and presence over TCP", SessionRoundTrip);
@@ -129,6 +132,7 @@ namespace Spatail.Core.Tests
             public PlanResult Ask(string prompt)
             {
                 PlanResult plan = planner.Plan(new PlanRequest { prompt = prompt, room = room, site = site, builds = store.Builds });
+                store.RetireScanLabels(plan);
                 store.Apply(plan);
                 return plan;
             }
@@ -568,6 +572,38 @@ namespace Spatail.Core.Tests
             Check(store.Builds.Count == 0, "clear");
         }
 
+        static void LabelsRetire()
+        {
+            World w = MakeWorld();
+            w.store.Add(BuildFactory.Labels(w.room));
+            PlanResult plan = w.Ask(DemoPrompts[0]);
+            Check(plan.ops[0].op == OpType.Remove && plan.ops[0].buildId == "labels", "plan carries the removal");
+            Check(w.store.Get("labels") == null && w.store.Get("walkthrough") != null, "labels gone, walkthrough in");
+            PlanResult again = w.Ask("label everything");
+            Check(w.store.Get("labels") != null && w.store.Get("walkthrough") != null, "asking for labels brings them back alongside");
+            PlanResult step = w.Ask("next");
+            Check(step.ops.Count == 1 && w.store.Get("labels") != null, "navigation leaves labels alone");
+        }
+
+        static void LayoutGizmo()
+        {
+            World w = MakeWorld();
+            w.Ask(DemoPrompts[0]);
+            Element gizmo = w.store.Get("walkthrough").elements.First(e => e.type == ElementType.Gizmo);
+            Placement p = LayoutSolver.Place(gizmo, w.room);
+            Near(p.position, w.station.TransformPoint(new Vec3(0.64f, 0.85f, 0)), "on the handwheel");
+            Near(p.rotation * Vec3.Up, Vec3.Up, "axis vertical");
+        }
+
+        static void PlanFocus()
+        {
+            World w = MakeWorld();
+            PlanResult plan = w.planner.Plan(new PlanRequest { prompt = "what is this?", room = w.room, site = w.site, builds = w.store.Builds, focusEntityId = "motor" });
+            Check(plan.ops.Count == 1 && plan.ops[0].build.elements[0].title == "Motor", "describes the motor");
+            plan = w.planner.Plan(new PlanRequest { prompt = "what is this?", room = w.room, site = w.site, builds = w.store.Builds });
+            Check(plan.ops.Count == 0, "without a focus there is nothing to describe");
+        }
+
         // ---- remote planner ----------------------------------------------------------------
 
         sealed class FakeHttp : IHttpTransport
@@ -730,9 +766,11 @@ namespace Spatail.Core.Tests
             var steps = new List<object>();
             // Scan labels first: this is what the room looks like right after the scan.
             steps.Add(Entry("(scan)", new PlanResult { reply = "Here is what I can see.", chip = "Labels", planner = "offline", ops = { PlanOp.Add(BuildFactory.Labels(w.room)) } }, w));
+            w.store.Add(BuildFactory.Labels(w.room));
             foreach (string prompt in script)
             {
                 PlanResult plan = w.planner.Plan(new PlanRequest { prompt = prompt, room = w.room, site = w.site, builds = w.store.Builds });
+                w.store.RetireScanLabels(plan);
                 steps.Add(Entry(prompt, plan, w));
                 w.store.Apply(plan);
             }

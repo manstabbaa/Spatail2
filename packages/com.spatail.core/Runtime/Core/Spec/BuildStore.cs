@@ -44,6 +44,23 @@ namespace Spatail.Core
             }
         }
 
+        /// <summary>
+        /// House rule shared by every host: the labels left by the room scan make way for the first real content,
+        /// as they do in the reference animation. Adds the removal to the plan itself so it also reaches session
+        /// peers and anything replaying the plan. Call before <see cref="Apply"/>.
+        /// </summary>
+        public void RetireScanLabels(PlanResult plan)
+        {
+            if (plan == null || Get(BuildKind.Labels) == null) return;
+            bool addsContent = false, alreadyRemoved = false;
+            foreach (PlanOp op in plan.ops)
+            {
+                if (op.op == OpType.Add && op.build != null && op.build.kind != BuildKind.Labels) addsContent = true;
+                if ((op.op == OpType.Remove && op.buildId == BuildKind.Labels) || op.op == OpType.Clear) alreadyRemoved = true;
+            }
+            if (addsContent && !alreadyRemoved) plan.ops.Insert(0, PlanOp.Remove(BuildKind.Labels));
+        }
+
         public void Apply(PlanResult plan)
         {
             if (plan == null) return;
