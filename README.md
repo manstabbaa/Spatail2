@@ -2,49 +2,35 @@
 
 **What AI did to software, Spatail does to mixed reality.**
 
-Stand next to a machine and say what you need. Spatail reads the room, plans the content with AI and builds it
-in place: a walkthrough on the valve, the flow through the pipes, last week's faults on the motor, this month's
-output by the bench, a parts checklist above it, a colleague brought into the room.
+You are wearing a headset, or holding a phone, and going about your day in a real place: a plant floor, a
+workshop, a street. You say what you need. Spatail looks at what the device senses at that moment, has an AI
+write a small program for exactly that request in exactly that place, and runs it in the space around you.
 
-This repository contains:
+Two things follow from that, and the whole project is built around them:
+
+- **No menu of content types.** There is no fixed list of "walkthrough", "chart", "checklist" for the AI to pick
+  from. It writes software against a small spatial API (`scene`, `space`, `user`, `voice`), so a request can
+  become a marker on one bolt, a measurement between two things, a route on the floor, a procedure wrapped around
+  a machine, or something nobody has asked for before.
+- **No pre-understood environment.** Nothing about the place is scanned, registered or loaded ahead of time.
+  Each request carries the camera frame, depth samples and whatever surfaces have been noticed so far, and the
+  program keeps sensing while it runs (`space.view.point`, `space.raycast`, `space.find`).
+
+## What is in this repository
 
 | | |
 |---|---|
-| `apps/spatail-quest` | The headset app: Unity project for Meta Quest 3 / 3S (passthrough mixed reality, Meta XR SDK). |
-| `apps/spatail-devtool-ios` | The dev tool: Unity project for iPhone / iPad (ARKit). The same runtime in AR, wrapped in developer tooling, and a remote console for a headset. |
-| `packages/com.spatail.core` | The shared Unity package both apps are built on. |
-| `services/planner` | The AI planner service: a small Node service that plans requests with Claude. |
-| `docs` | The interactive developer guide, with a browser simulator that replays real planner output. |
-| `tests`, `tools` | Core test suite, a Unity compile check that needs no Unity install, and the font atlas baker. |
+| `packages/com.spatail.core` | The shared Unity package: the script runtime that executes generated programs in a sandbox, the Spatail API library (`spatail.js`), live surface tracking, rendering, and the app shell. |
+| `apps/spatail-quest` | The headset app: Unity project for Meta Quest 3 / 3S (passthrough, live depth, passthrough camera). |
+| `apps/spatail-devtool-ios` | The dev tool: Unity project for iPhone / iPad (ARKit). The same runtime in AR with developer tooling: sensed surfaces, running programs, a code editor, episode capture, and a remote console for a headset. |
+| `services/planner` | The planner service: Claude sees the frame and writes the program. Also serves the browser lab and replays saved requests as a regression set. |
+| `docs/lab` | The browser lab: the same runtime library and programs in generated spaces, with a virtual camera. The test bench for places that are not predetermined when you have no headset on. |
+| `docs` | The interactive developer guide. |
+| `tests`, `tools` | Core test suite, a Unity compile check that needs no Unity install, the font atlas baker. |
 
-## Try it in five minutes, without a device
+## Try it without a device
 
-1. Install **Unity 6.3 LTS** (6000.3.x) with Android Build Support (for the Quest project) or iOS Build Support
-   (for the dev tool).
-2. Open `apps/spatail-quest` (or `apps/spatail-devtool-ios`) in Unity. On first open the project sets itself up:
-   it creates its scene and applies the platform settings. You can re-run this from **Spatail > Setup Project**.
-3. Press **Play**. With no headset or phone attached, the app runs in a simulated room.
-   - Hold the right mouse button to look; `W A S D` `Q E` to move while looking.
-   - Click a suggestion above the prompt bar, or just start typing and press Enter.
-   - `F1` to `F6` send the six requests from the film.
-   - Click **Move pump**, point at the floor, and click to drop it. `Z` / `X` rotate it.
-
-No network or API key is needed for this: the on-device planner answers the core requests.
-
-## Put it on a headset
-
-Open `apps/spatail-quest`, connect a Quest 3 or 3S in developer mode, and choose **Spatail > Build Quest APK**
-(output: `apps/spatail-quest/Builds/Spatail-Quest.apk`), or use Unity's Build And Run. Run Space Setup on the
-headset first so the app can see your floor, walls and tables. Details and controls: `apps/spatail-quest/README.md`.
-
-## Put the dev tool on an iPhone
-
-Open `apps/spatail-devtool-ios` on a Mac, switch the platform to iOS (**File > Build Profiles**), choose
-**Spatail > Build iOS (Xcode project)** (output: `apps/spatail-devtool-ios/Builds/iOS`), open
-`Unity-iPhone.xcodeproj` in Xcode, pick your team and run on a device. Details and the command-line build:
-`apps/spatail-devtool-ios/README.md`.
-
-## Turn on the AI planner
+**In a browser, with the real planner:**
 
 ```bash
 cd services/planner
@@ -53,33 +39,49 @@ npm run build
 ANTHROPIC_API_KEY=... npm start
 ```
 
-Then point the apps at it: set **Planner URL** to `http://<that machine's LAN address>:8787` in the dev tool's
-Settings, and push it to a headset from the dev tool's Link tab; or bake it into a build with
-`Assets/Resources/SpatailConfig.json` (`{ "plannerUrl": "http://192.168.1.20:8787" }`). See `services/planner/README.md`.
+Open `http://localhost:8787/lab/`, pick a generated space (plant room, office, street), choose the Planner
+builder and ask for something. The lab renders what the simulated headset camera sees, sends that frame to the
+planner, and runs the program Claude writes. Walk around with the arrow keys and ask again from somewhere else.
 
-Devices never hold a model API key. If the service is unreachable the apps fall back to the on-device planner.
+**In a browser, with no API key:** open the developer guide and use the Workshop space. It replays six
+programs that were written by hand for a stand-in pump (the six requests from the film), and you can edit any
+program and re-run it.
 
-## How it works
+**In Unity:** open `apps/spatail-quest` or `apps/spatail-devtool-ios` in Unity 6.3 LTS and press Play. With no
+device attached the app runs in a simulated room. Type a request and press Enter; `F1` to `F6` send the six
+film requests.
+
+## How a request becomes an experience
 
 ```
- say it ──▶ room model ──▶ planner ──▶ plan ──▶ layout solver ──▶ views in the room
-            (device +       (Claude     (builds of      (anchors become       (and to anyone in
-             registered      or on-      anchored        poses, clear of        the session)
-             equipment)      device)     elements)       obstacles)
+ say it ─▶ sense ─────────────▶ write ───────────────▶ run ──────────────▶ live
+           camera frame,         Claude reads the       sandboxed           the program keeps
+           depth samples,        frame and writes a     JavaScript engine,  sensing, animating
+           surfaces so far       program for the API    budgets, repair     and listening
 ```
 
-- **Room model.** The device contributes surfaces and furniture. The registered site
-  (`packages/com.spatail.core/Runtime/Resources/Spatail/pump_station.json`) contributes the equipment, its parts
-  and what is known about it. Fixtures bind to real furniture when the room has it and to stand-in holograms
-  when it does not, so the demo works in any room.
-- **Plan.** Planners return operations on *builds*: named groups of *elements* (label, pin, card, gizmo, flow,
-  highlight, chart, checklist, avatar, panel) anchored to entities in the room. One wire format is shared by the
-  on-device planner, the AI service, the session link and the docs simulator.
-- **Layout.** Anchors such as `floor-near` or `callout` are resolved against the live room, so content lands
-  somewhere sensible instead of being dropped in with no sense of the room.
+1. **Sense.** The device captures a camera frame and its pose, samples depth along a grid of rays, and lists
+   the flat surfaces it has noticed so far (often few, sometimes none).
+2. **Write.** The planner service gives Claude the frame, the samples and the API reference. Claude writes a
+   program. For things it can see it anchors with `space.view.point(u, v)`, which casts through that pixel into
+   the sensed geometry.
+3. **Run.** The device runs the program in its own JavaScript engine with nothing in scope but the Spatail API.
+   Statement and node budgets stop runaway code. If a program fails to start, its error goes back to the planner
+   once for repair.
+4. **Live.** Programs keep running. They animate, respond to taps and short voice commands on the device, can
+   look again with `space.find`, and keep their state when a follow-up request replaces them.
 
-The developer guide walks through all of it interactively, with a simulator you can type requests into:
-https://claude.ai/artifact/TY21seoSPcaLnVCzMdfPGe (source in `docs/`).
+## Testing on places that are not predetermined
+
+- **Generated spaces in the lab.** Seeded layouts of plant rooms, offices and streets. Surfaces start unknown
+  and are discovered as the virtual user looks around, the way a headset would.
+- **Episodes.** Any request, from the lab or from a device, can be saved with its frame and sensed context.
+  `npm run replay` in `services/planner` re-runs every saved episode against the planner and checks that each
+  program starts. That is the regression set: real requests in the real places you have walked through.
+- **On device.** The dev tool shows what the sensor has found, the frame that was sent, the program that came
+  back and its log, and lets you edit and re-run the program on the spot.
+
+The developer guide has the full method.
 
 ## Tests and checks
 
@@ -95,26 +97,21 @@ dotnet build tools/UnityCompileCheck
 cd services/planner && npm test
 ```
 
-The first runs the core suite (planner, layout, binder, wire format, session link over real sockets). The second
-type-checks the Unity-facing runtime against Unity's reference assemblies, with no Unity install or licence. The
-third tests the planner service with a stand-in for the Claude client. CI runs all three on every push.
-
-After changing the planner, the layout solver or the site definition, regenerate the data the docs simulator
-replays:
-
-```bash
-dotnet run --project tests/Spatail.Core.Tests -- export docs/sim/data
-```
+The first runs the core suite: the script runtime and its sandbox, the six film programs in two room layouts,
+surface tracking, the build pipeline with repair, and the session link. The second type-checks the Unity
+runtime against Unity's reference assemblies with no Unity install. The third tests the planner service with a
+stand-in for the Claude client and runs every example program against the real runtime library.
 
 ## What has and has not been run
 
-Everything in "Tests and checks" passes. The Unity projects, however, were written without access to a Unity
-editor, Xcode, a headset or Claude credentials. The platform code was checked against the actual SDK sources
-(Meta XR SDK 209, AR Foundation 6.3.5) and compile-checked as far as that is possible outside Unity, but the
-first real build and the first on-device run will happen on your machines. `docs/` has a table of exactly what
-was verified and how.
+Everything in "Tests and checks" passes, and the browser lab has been exercised in a headless browser. The
+Unity projects were written without a Unity editor, Xcode, a headset or Claude credentials: platform code was
+checked against the actual SDK sources and compile-checked outside Unity, but the first editor import, the first
+device build and the first live call to Claude will happen on your machines. The developer guide has a table of
+exactly what was verified and how.
 
 ## Licences
 
-The Inter typeface (baked into the font atlases) is used under the SIL Open Font License; see
-`packages/com.spatail.core/Runtime/Resources/Spatail/Fonts/INTER_LICENSE.txt`.
+Inter (baked into the font atlases) is under the SIL Open Font License. Jint (BSD-2-Clause), Acornima
+(BSD-3-Clause) and System.Runtime.CompilerServices.Unsafe (MIT) are redistributed unmodified; see
+`packages/com.spatail.core/Runtime/Plugins/THIRD_PARTY_NOTICES.md`.

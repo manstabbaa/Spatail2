@@ -18,10 +18,10 @@ jobs:
         run: dotnet run --project tests/Spatail.Core.Tests
       - name: Type-check the Unity runtime against Unity reference assemblies
         run: dotnet build tools/UnityCompileCheck
-      - name: Exported simulator data is up to date
+      - name: The browser lab runs the same library and programs as the devices
         run: |
-          dotnet run --project tests/Spatail.Core.Tests -- export docs/sim/data
-          git diff --exit-code -- docs/sim/data
+          dotnet run --project tests/Spatail.Core.Tests -- export docs/lab/data
+          git diff --exit-code -- docs/lab/data
 
   planner:
     name: Planner service tests
@@ -36,3 +36,7 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm test
+      - name: The guide shows the instructions the planner actually sends
+        run: |
+          npm run export-docs
+          git diff --exit-code -- ../../docs/planner-data.js

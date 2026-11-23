@@ -13,7 +13,8 @@ function show(s) {
     ? [[-w / 2, -s.size[1] / 2, 0.02], [w / 2, -s.size[1] / 2, 0.02], [w / 2, s.size[1] / 2, 0.02], [-w / 2, s.size[1] / 2, 0.02]]
     : [[-w / 2, y, -s.size[2] / 2], [w / 2, y, -s.size[2] / 2], [w / 2, y, s.size[2] / 2], [-w / 2, y, s.size[2] / 2]];
   // Pull the outline in a hand's width so neighbouring surfaces do not share an edge.
-  const points = corners.map(c => vec.add(s.position, quat.rotate(s.rotation, c.map(v => v - Math.sign(v) * (Math.abs(v) > 0.2 ? 0.1 : 0)))));
+  const inset = v => v - Math.sign(v) * (Math.abs(v) > 0.2 ? 0.1 : 0);
+  const points = corners.map(c => vec.add(s.position, quat.rotate(s.rotation, wall ? [inset(c[0]), inset(c[1]), c[2]] : [inset(c[0]), c[1], inset(c[2])])));
   points.push(points[0]);
   scene.line({ points, width: 0.014, color: colour });
 
@@ -36,18 +37,20 @@ function scan() {
   // A running count that stays with the user.
   const text = count === 0 ? 'Looking for surfaces...' : `${count} surface${count === 1 ? '' : 's'} found`;
   if (!counter || counter.data.text !== text) {
+    const at = counter ? counter.position : hudSpot();
     if (counter) counter.remove();
-    counter = kit.pill(text, { style: 'outline', size: theme.text.small, billboard: 'full' });
+    counter = kit.pill(text, { style: 'outline', size: theme.text.small, billboard: 'full', position: at });
     counter.data.text = text;
   }
 }
 
-scene.onFrame(() => {
-  if (!counter) return;
+// Where the count floats: a little below the line of sight, an arm's length ahead.
+function hudSpot() {
   const head = user.head;
-  const flat = vec.normalize(vec.flat(head.forward));
-  const target = vec.add(vec.add(head.position, vec.scale(flat, 0.9)), [0, -0.32, 0]);
-  counter.position = vec.lerp(counter.position, target, 0.12);
+  return vec.add(vec.add(head.position, vec.scale(vec.normalize(vec.flat(head.forward)), 0.9)), [0, -0.32, 0]);
+}
+scene.onFrame(() => {
+  if (counter) counter.position = vec.lerp(counter.position, hudSpot(), 0.12);
 });
 scan();
 scene.every(0.4, scan);

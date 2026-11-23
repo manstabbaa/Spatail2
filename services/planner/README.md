@@ -1,15 +1,19 @@
 # Spatail planner service
 
-Turns "what the user said" plus "what the device knows about the room" into spatial content, using Claude.
+Claude looks at what the device senses and writes the program that builds the experience.
 
-The headset and the iOS dev tool never hold a model API key. They send each request here; this service owns the
-model, the instructions and the credentials, and answers with a plan in the same wire format the on-device
-offline planner produces. If the service is unreachable or fails, the device falls back to the offline planner.
+There is no list of content types in this service and nothing about any place is stored in it. Each request
+carries what the device sensed at that moment: a camera frame, a coarse grid of depth samples, whatever flat
+surfaces it has noticed so far, and what is already running. The model reads that, writes a small JavaScript
+program against the Spatail API, and the device runs it.
 
 ```
-device  ──POST /v1/plan──▶  planner service  ──Messages API──▶  Claude
-        ◀── PlanResult ───                   ◀─ structured JSON ─
+device ──POST /v1/build──▶ planner service ──Messages API──▶ Claude (sees the frame, writes code)
+       ◀── { reply, title, id, code } ──
+       ──POST /v1/locate─▶  "where is the red valve in this frame?"   (space.find, while a program runs)
 ```
+
+Devices never hold a model API key. If the service is unreachable they fall back to a recorded demo.
 
 ## Run it
 
@@ -20,18 +24,27 @@ npm run build
 ANTHROPIC_API_KEY=... npm start
 ```
 
-Then put this machine's LAN address in the app: **Planner URL** `http://<address>:8787` (the prompt bar's settings
-on Quest come from the dev tool or `adb`; on iOS it is under Settings in the drawer).
+Then:
 
-Check it without a device:
+- **Browser lab** (no device needed): open `http://localhost:8787/lab/`, choose a space, pick the Planner
+  builder and ask for something. The lab renders a camera frame of the simulated place, sends it here, and runs
+  what comes back.
+- **Apps**: set the planner URL to this machine's LAN address, `http://<address>:8787`, in the iOS dev tool's
+  Settings (and push it to a headset from the Link tab), or bake it into a build with
+  `Assets/Resources/SpatailConfig.json`.
 
-```bash
-curl http://localhost:8787/healthz
-```
+## Endpoints
 
-```bash
-ANTHROPIC_API_KEY=... npm run plan -- "label every part of the pump and tell me what the gate valve does"
-```
+| | |
+|---|---|
+| `POST /v1/build` | `{ prompt, image?, view?, user?, floorY?, surfaces?, props?, running?, repair? }` → `{ reply, title, id, code, remove, clear, builder, latencyMs, error? }`. `image` is a base64 JPEG. `repair` carries a program that failed and its error, for one retry. |
+| `POST /v1/locate` | `{ query, image }` → `{ points: [{ u, v, label }] }`, image positions from 0 to 1. |
+| `POST /v1/episodes` | `{ request, result }` → saved under `episodes/` as a test case. |
+| `GET /healthz` | Model, effort, loaded examples and knowledge files. |
+| `GET /lab/` | The browser lab from `docs/lab`. |
+
+Planner failures are HTTP 200 with `error` set, so a device can show the reply and fall back. Only a bug in
+the service is a 500.
 
 ## Configuration
 
@@ -39,24 +52,38 @@ ANTHROPIC_API_KEY=... npm run plan -- "label every part of the pump and tell me 
 |---|---|---|
 | `ANTHROPIC_API_KEY` | none | Credentials for Claude. Any credential the Anthropic SDK resolves works. |
 | `PORT` | `8787` | Port to listen on. |
-| `SPATAIL_TOKEN` | none | Shared secret. When set, requests need `Authorization: Bearer <token>`. |
+| `SPATAIL_TOKEN` | none | Shared secret. When set, API requests need `Authorization: Bearer <token>`. |
 | `SPATAIL_MODEL` | `claude-opus-5-5` | Claude model id. |
-| `SPATAIL_EFFORT` | `low` | `low`, `medium`, `high`, `xhigh` or `max`. Higher is more thorough and slower. |
+| `SPATAIL_EFFORT` | `medium` | `low` to `max`. Lower is faster and simpler; higher is slower and more thorough. |
+| `SPATAIL_KNOWLEDGE_DIR` | `./knowledge` | `.json` and `.md` files given to the model as what the organisation knows. |
+| `SPATAIL_EPISODES_DIR` | `./episodes` | Where saved requests go. They contain camera frames; the folder is git-ignored. |
 
-## How a request is planned
+## What the model is given
 
-- `src/prompt.ts` holds the standing instructions and builds the request. The instructions and the site's
-  knowledge are sent as two cached system blocks; the room, current builds and the user's words go in the user
-  message, so repeat requests for the same site read most of their input from the prompt cache.
-- `src/schema.ts` is the plan's JSON Schema. The response is constrained to it with structured outputs, so the
-  model cannot return anything the device cannot parse.
-- `src/planner.ts` makes the call (with server-side refusal fallback enabled), handles refusals, truncation and
-  API errors, and reports which model actually answered.
-- `src/server.ts` is the HTTP surface. Planner failures are returned as HTTP 200 with `error` set, so the device
-  can show the reply and fall back; only a bug in the service is a 500.
+- `src/prompt.ts`: the standing instructions. They explain the situation (someone moving through a real place,
+  nothing prepared), what arrives with a request, how to anchor to what is seen, and how to change what is
+  running.
+- `src/api.ts`: the API reference, included in the instructions. A test fails if it mentions anything the
+  runtime library does not define.
+- `examples/` and two programs from the app package: worked examples, each checked by a test that runs it.
+- `knowledge/`: demo data standing in for a maintenance system. Replace it, or point
+  `SPATAIL_KNOWLEDGE_DIR` at an export from yours.
 
-The contract with the Unity side is `SpecJson.cs` and `RemotePlanner.cs` in `packages/com.spatail.core`. A test
-checks that the element types and anchor modes listed here match the C# constants.
+The instructions and the knowledge are two cached system blocks; the frame and the sensed context go in the
+user message. The answer is constrained to a small schema with structured outputs, and server-side refusal
+fallback is enabled.
+
+## Testing against real places
+
+```bash
+ANTHROPIC_API_KEY=... npm run replay
+```
+
+Every request you save as an episode (from the lab's "Save episode", or from the dev tool) is a real moment in
+a real place: the frame, the depth samples, what was said. `replay` runs all of them through the planner again,
+checks that each returned program parses and starts against the real runtime library, and writes a report. Use
+it whenever you change the instructions, the API or the model, to see the effect across everywhere you have
+been instead of the one spot you are standing in. Each replay calls the model and costs tokens.
 
 ## Test
 
@@ -64,4 +91,9 @@ checks that the element types and anchor modes listed here match the C# constant
 npm test
 ```
 
-The tests run without credentials: the Claude client is replaced by a stand-in.
+Runs without credentials: the Claude client is replaced by a stand-in. After changing the instructions or the
+API reference, refresh what the developer guide shows:
+
+```bash
+npm run export-docs
+```
