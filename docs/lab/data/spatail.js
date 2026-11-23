@@ -585,13 +585,23 @@
   // Nothing here is special: every piece is built from the scene primitives above, and programs are free to
   // build their own instead.
 
+  // Kit pieces are groups. Only placement goes to the group itself; style, size and colour belong to the
+  // pieces inside it.
+  function placementOf(options) {
+    var out = {};
+    ['position', 'rotation', 'scale', 'parent', 'billboard', 'visible'].forEach(function (k) {
+      if (options[k] !== undefined) out[k] = options[k];
+    });
+    return out;
+  }
+
   var kit = {
     // A rounded pill of text. style 'solid' (coloured, white text) or 'outline' (white, coloured text).
     pill: function (text, options) {
       options = options || {};
       var c = color(options.color), solid = options.style !== 'outline';
       var size = options.size || theme.text.label, padX = size * 0.75, height = size * 1.8;
-      var g = scene.group(options);
+      var g = scene.group(placementOf(options));
       var label = scene.text({ parent: g, text: text, size: size, weight: 'semibold', align: 'center', color: solid ? '#FFFFFF' : c, position: [0, 0, -theme.layer] });
       g.width = label.width + padX * 2;
       g.height = height;
@@ -632,7 +642,7 @@
       options = options || {};
       var c = color(options.color), primary = options.primary !== false;
       var size = options.size || theme.text.small, height = size * 2;
-      var g = scene.group(options);
+      var g = scene.group(placementOf(options));
       var label = scene.text({ parent: g, text: text, size: size, weight: 'semibold', align: 'center', color: primary ? '#FFFFFF' : c, position: [0, 0, -theme.layer] });
       g.width = label.width + size * 2;
       g.height = height;
@@ -680,7 +690,7 @@
     arcArrow: function (options) {
       options = options || {};
       var c = color(options.color), r = options.radius || 0.14, arc = options.arc || 250, clockwise = options.clockwise !== false;
-      var g = scene.group(options);
+      var g = scene.group(placementOf(options));
       var spinner = scene.group({ parent: g });
       scene.torus({ parent: spinner, radius: r, tube: 0.011, arc: arc, color: c });
       // The arc runs anticlockwise (seen from above) from +X. The head leads the motion.
