@@ -15,7 +15,8 @@ namespace Spatail
     /// </summary>
     public static class SimPlatform
     {
-        public static SpatailApp Launch()
+        /// <param name="worldUi">Show the floating prompt bar. Pass false when the host app draws its own screen UI.</param>
+        public static SpatailApp Launch(bool worldUi = true)
         {
             var cameraObject = new GameObject("Sim Camera") { tag = "MainCamera" };
             var camera = cameraObject.AddComponent<Camera>();
@@ -43,7 +44,7 @@ namespace Spatail
                 Room = new SimRoomProvider(),
                 TextEntry = keyboard,
                 DeviceName = "sim",
-                WorldUi = true,
+                WorldUi = worldUi,
                 StationRotateInput = SimCameraController.StationRotate,
             };
             services.Pointers.Add(pointer);
