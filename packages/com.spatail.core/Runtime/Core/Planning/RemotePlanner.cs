@@ -54,6 +54,7 @@ namespace Spatail.Core
                 { "knowledge", request.site.knowledge.raw },
                 { "builds", builds },
             };
+            if (!string.IsNullOrEmpty(request.focusEntityId)) body["focus"] = request.focusEntityId;
             return Json.Write(body);
         }
 

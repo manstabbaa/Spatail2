@@ -12,6 +12,8 @@ namespace Spatail.Core
         public SiteDefinition site;
         /// <summary>What is already in the room, so follow-ups ("make it bigger", "next") can refer to it.</summary>
         public IReadOnlyList<Build> builds = new List<Build>();
+        /// <summary>The entity the user is pointing or looking at, if any. Lets "what is this?" mean something.</summary>
+        public string focusEntityId;
     }
 
     /// <summary>Turns a spoken or typed request into changes to the room's content.</summary>
@@ -166,6 +168,8 @@ namespace Spatail.Core
             if (TextMatch.ContainsAny(p, "what is", "what s", "whats", "what does", "tell me about", "explain", "describe", "about"))
             {
                 RoomEntity subject = FindMentioned(p, room);
+                // "What is this?" while pointing at something: the pointer says which thing.
+                if (subject == null && TextMatch.ContainsAny(p, "this", "that", "it")) subject = room.Get(request.focusEntityId);
                 if (subject != null) return Built(BuildFactory.Describe(subject), subject.label + ".");
             }
 
