@@ -52,6 +52,8 @@ namespace Spatail.Core
         public event Action<string, Peer> PromptReceived;
         /// <summary>Client only: the host's status line for a prompt.</summary>
         public event Action<string, string, string> ReplyReceived;
+        /// <summary>A peer pushed planner settings: (plannerUrl, plannerToken, useAi, from).</summary>
+        public event Action<string, string, bool, Peer> ConfigReceived;
         /// <summary>Human-readable connection status changes ("Hosting on 192.168.1.20:7777", "Disconnected").</summary>
         public event Action<string> StatusChanged;
 
@@ -150,6 +152,9 @@ namespace Spatail.Core
 
         public void SendPresence(Vec3 stationPosition, Vec3 stationForward) =>
             Broadcast(SessionMessage.MakePresence(LocalName, stationPosition, stationForward), null);
+
+        public void SendConfig(string plannerUrl, string plannerToken, bool useAi) =>
+            Broadcast(SessionMessage.MakeConfig(plannerUrl, plannerToken, useAi), null);
 
         public void SendReply(string text, string chip, string planner) => Broadcast(SessionMessage.MakeReply(text, chip, planner), null);
 
@@ -284,6 +289,14 @@ namespace Spatail.Core
                 {
                     string text = msg.Str("text", ""), chip = msg.Str("chip", ""), planner = msg.Str("planner", "");
                     Post(() => { if (ReplyReceived != null) ReplyReceived(text, chip, planner); });
+                    break;
+                }
+
+                case SessionMessage.Config:
+                {
+                    string url = msg.Str("plannerUrl", ""), token = msg.Str("plannerToken", "");
+                    bool useAi = msg.Bool("useAi", true);
+                    Post(() => { if (ConfigReceived != null) ConfigReceived(url, token, useAi, c.peer); });
                     break;
                 }
 

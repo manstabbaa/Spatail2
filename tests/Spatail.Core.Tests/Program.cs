@@ -68,6 +68,7 @@ namespace Spatail.Core.Tests
             Run("Offline planner: describe a part, and unknown requests", PlanDescribeAndUnknown);
             Run("Plans survive a JSON round trip", PlanRoundTrip);
             Run("Sanitize repairs and drops bad content", SanitizeRepairs);
+            Run("A plan in the AI service's shape parses, validates and lays out", ServicePlanShape);
             Run("Layout: every demo element gets a sane pose", LayoutSane);
             Run("Layout: chart lands on free floor by the bench", LayoutChart);
             Run("Layout: flow path follows the pipework", LayoutFlow);
@@ -474,6 +475,35 @@ namespace Spatail.Core.Tests
             Check(notes.Count >= 5, "notes explain what changed: " + notes.Count);
         }
 
+        static void ServicePlanShape()
+        {
+            // Exactly what the planner service's schema makes the model emit: vectors as {x,y,z}, every field present.
+            World w = MakeWorld();
+            string json = @"{""reply"":""Two steps."",""chip"":""Walkthrough"",""planner"":""claude-opus-5-5"",""latencyMs"":2100,""ops"":[
+              {""op"":""remove"",""buildId"":""labels""},
+              {""op"":""add"",""build"":{""id"":""walkthrough"",""kind"":""walkthrough"",""title"":""Walkthrough"",""stepCount"":2,""currentStep"":1,""elements"":[
+                {""id"":""pin-1"",""type"":""pin"",""number"":1,""text"":"""",""step"":0,""style"":""accent"",""scale"":1,""anchor"":{""entity"":""gate-valve"",""at"":""top"",""offset"":{""x"":0,""y"":0,""z"":0}}},
+                {""id"":""card-1"",""type"":""card"",""number"":1,""title"":""Close this valve"",""body"":""Clockwise until it stops."",""step"":1,""style"":""accent"",""scale"":1,""anchor"":{""entity"":""gate-valve"",""at"":""callout"",""offset"":{""x"":0,""y"":0.1,""z"":0}}},
+                {""id"":""gizmo-1"",""type"":""gizmo"",""action"":""turn-cw"",""step"":1,""style"":""accent"",""scale"":1,""anchor"":{""entity"":""gate-valve"",""at"":""top"",""offset"":{""x"":0,""y"":0,""z"":0}}},
+                {""id"":""flow-1"",""type"":""flow"",""points"":[{""x"":1.3,""y"":0.46,""z"":0},{""x"":0.2,""y"":0.46,""z"":0}],""radius"":0.07,""entities"":[""inlet""],""text"":"""",""step"":2,""style"":""accent"",""scale"":1,""anchor"":{""entity"":""pump-p101"",""at"":""center"",""offset"":{""x"":0,""y"":0,""z"":0}}},
+                {""id"":""chart-1"",""type"":""chart"",""title"":""Output"",""unit"":""m3"",""values"":[1,2,3],""labels"":[],""step"":2,""style"":""accent"",""scale"":1.2,""anchor"":{""entity"":""workbench"",""at"":""floor-near"",""offset"":{""x"":0,""y"":0,""z"":0}}},
+                {""id"":""list-1"",""type"":""checklist"",""title"":""Parts"",""items"":[{""text"":""Seal"",""done"":true}],""people"":[""M""],""more"":0,""step"":2,""style"":""accent"",""scale"":1,""anchor"":{""entity"":""workbench"",""at"":""above"",""offset"":{""x"":0,""y"":0,""z"":0}}}]}}]}";
+            PlanResult plan = SpecJson.ParsePlan(json);
+            List<string> notes = SpecJson.Sanitize(plan, w.room);
+            Check(notes.Count == 0, "a well-formed service plan needs no repairs: " + string.Join("; ", notes));
+            Check(plan.planner == "claude-opus-5-5" && plan.ops.Count == 2, "metadata and ops");
+            Build b = plan.ops[1].build;
+            Check(b.elements.Count == 6 && b.stepCount == 2 && b.currentStep == 1, "build parsed");
+            Near(b.elements[1].anchor.offset, new Vec3(0, 0.1f, 0), "object-form offset");
+            Near(b.elements[3].points[0], new Vec3(1.3f, 0.46f, 0), "object-form flow points");
+            Check(b.elements[5].items[0].done && b.elements[5].people[0] == "M", "checklist fields");
+            Near(b.elements[4].scale, 1.2f, "scale");
+            foreach (Element e in b.elements) Check(LayoutSolver.Place(e, w.room).valid, e.id + " places");
+            w.store.Add(BuildFactory.Labels(w.room));
+            w.store.Apply(plan);
+            Check(w.store.Get("labels") == null && w.store.Get("walkthrough") != null, "applies");
+        }
+
         // ---- layout ------------------------------------------------------------------------
 
         static void LayoutSane()
@@ -709,6 +739,12 @@ namespace Spatail.Core.Tests
                 WaitFor(() => { client.Pump(); return received != null && reply != null; }, "plan + reply");
                 Check(received.ops[0].build.id == "flow" && received.ops[0].build.elements.Count == plan.ops[0].build.elements.Count, "plan arrived intact");
                 Check(reply.EndsWith("|Live flow"), "reply: " + reply);
+
+                string config = null;
+                host.ConfigReceived += (url, token, useAi, p) => config = url + "|" + token + "|" + useAi + "|" + p.name;
+                client.SendConfig("http://10.0.0.5:8787", "tok", true);
+                WaitFor(() => { host.Pump(); return config != null; }, "config");
+                Check(config == "http://10.0.0.5:8787|tok|True|Sara", "config: " + config);
 
                 Peer left = null;
                 host.PeerLeft += p => left = p;

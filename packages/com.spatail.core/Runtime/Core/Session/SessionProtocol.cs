@@ -22,6 +22,14 @@ namespace Spatail.Core
         /// <summary>Host's status line for the prompt it just handled.</summary>
         public const string Reply = "reply";
 
+        /// <summary>Planner settings pushed from one device to another, so a headset can be configured from the dev tool.</summary>
+        public const string Config = "config";
+
+        public static string MakeConfig(string plannerUrl, string plannerToken, bool useAi) => Json.Write(new Dictionary<string, object>
+        {
+            { "type", Config }, { "plannerUrl", plannerUrl ?? "" }, { "plannerToken", plannerToken ?? "" }, { "useAi", useAi },
+        });
+
         public static string MakeHello(string name, string role, string device) => Json.Write(new Dictionary<string, object>
         {
             { "type", Hello }, { "name", name }, { "role", role }, { "device", device }, { "protocol", 1 },

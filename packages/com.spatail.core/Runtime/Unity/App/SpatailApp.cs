@@ -120,6 +120,7 @@ namespace Spatail
             Session.PlanReceived += OnPlanReceived;
             Session.PromptReceived += (text, peer) => Submit(text, peer.name);
             Session.ReplyReceived += OnReplyReceived;
+            Session.ConfigReceived += OnConfigReceived;
 
             if (services.WorldUi)
             {
@@ -398,6 +399,22 @@ namespace Spatail
             _suppressBroadcast = true;
             Apply(plan);
             _suppressBroadcast = false;
+        }
+
+        /// <summary>Pushes this device's planner settings to everyone in the session, e.g. from the dev tool to a headset.</summary>
+        public void SendPlannerSettingsToPeers()
+        {
+            if (!Session.IsActive) { Log("Join or host a session first."); return; }
+            Session.SendConfig(Settings.PlannerUrl, Settings.PlannerToken, Settings.UseAi);
+            Log("Sent planner settings to " + Session.Peers.Count + " peer(s).");
+        }
+
+        void OnConfigReceived(string plannerUrl, string plannerToken, bool useAi, Peer peer)
+        {
+            Settings.PlannerUrl = plannerUrl;
+            Settings.PlannerToken = plannerToken;
+            Settings.UseAi = useAi;
+            Log(peer.name + " set the planner to " + (string.IsNullOrEmpty(plannerUrl) ? "offline only" : plannerUrl) + (useAi ? "" : " (AI off)") + ".");
         }
 
         void OnReplyReceived(string text, string chip, string planner)
