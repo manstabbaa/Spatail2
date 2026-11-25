@@ -1,2 +1,9 @@
 # Videos written by Spatail > Record Demo (Play Mode)
 /Recordings/
+
+# Machine-specific planner address and token, baked into a local build
+/Assets/Resources/SpatailConfig.json
+/Assets/Resources/SpatailConfig.json.meta
+
+# Batch-mode build logs
+/build.log
