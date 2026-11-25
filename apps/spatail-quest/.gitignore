@@ -7,3 +7,10 @@
 
 # Batch-mode build logs
 /build.log
+
+# Android build scratch space
+/.utmp/
+
+# Meta's Immersive Debugger agent settings: holds this machine's address and an access token
+/Assets/Resources/DevAgentSettings.asset
+/Assets/Resources/DevAgentSettings.asset.meta
